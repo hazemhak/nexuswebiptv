@@ -86,7 +86,7 @@ export class SettingsServerSectionComponent {
     readonly exportedApiUrl = computed(() => {
         const origin = window.location.origin;
         const target = this.selectedExportPlaylist();
-        const path = target === 'all' ? '/api/m3u' : `/api/m3u/${encodeURIComponent(target)}`;
+        const path = target === 'all' ? '/api/m3u.m3u' : `/api/m3u/${encodeURIComponent(target)}.m3u`;
         const token =
             this.serverToken().trim() ||
             this.serverStatusService.accessToken() ||

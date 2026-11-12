@@ -46,32 +46,28 @@ export function createM3uExportRouter(
         res.status(401).send('#EXTM3U\n# Unauthorized: Invalid or missing access token\n');
     };
 
-    router.get('/m3u/:id', checkAuth, async (req, res) => {
+    const exportHandler = async (req: Request, res: Response) => {
         if (!storage) {
             res.status(503).send('#EXTM3U\n# Error: Server storage is disabled\n');
             return;
         }
 
-        const rawId = req.params.id;
-        const playlistId = Array.isArray(rawId) ? rawId[0] : rawId;
-        const doc = storage.playlists.get(playlistId);
-        if (!doc) {
-            res.status(404).send('#EXTM3U\n# Error: Playlist not found\n');
-            return;
-        }
+        const rawId = req.params['id'];
+        if (rawId) {
+            const playlistId = (Array.isArray(rawId) ? rawId[0] : rawId).replace(/\.m3u8?$/i, '');
+            const doc = storage.playlists.get(playlistId);
+            if (!doc) {
+                res.status(404).send('#EXTM3U\n# Error: Playlist not found\n');
+                return;
+            }
 
-        const legacy = legacySourceDocument(doc) as Record<string, unknown>;
-        const title = typeof legacy['title'] === 'string' ? legacy['title'] : 'playlist';
+            const legacy = legacySourceDocument(doc) as Record<string, unknown>;
+            const title = typeof legacy['title'] === 'string' ? legacy['title'] : 'playlist';
 
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
-        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(title)}.m3u"`);
+            res.setHeader('Content-Type', 'audio/x-mpegurl; charset=utf-8');
+            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(title)}.m3u"`);
 
-        await streamM3uPlaylists([legacy], req, res, accessToken);
-    });
-
-    router.get('/m3u', checkAuth, async (req, res) => {
-        if (!storage) {
-            res.status(503).send('#EXTM3U\n# Error: Server storage is disabled\n');
+            await streamM3uPlaylists([legacy], req, res, accessToken);
             return;
         }
 
@@ -79,11 +75,17 @@ export function createM3uExportRouter(
             .listAll()
             .map((doc) => legacySourceDocument(doc) as Record<string, unknown>);
 
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+        res.setHeader('Content-Type', 'audio/x-mpegurl; charset=utf-8');
         res.setHeader('Content-Disposition', 'inline; filename="iptvnator-all.m3u"');
 
         await streamM3uPlaylists(allPlaylists, req, res, accessToken);
-    });
+    };
+
+    router.get('/m3u/:id', checkAuth, exportHandler);
+    router.get('/m3u/:id.m3u', checkAuth, exportHandler);
+    router.get('/m3u', checkAuth, exportHandler);
+    router.get('/m3u.m3u', checkAuth, exportHandler);
+    router.get('/playlist.m3u', checkAuth, exportHandler);
 
     return router;
 }
@@ -103,7 +105,14 @@ async function streamM3uPlaylists(
             const serverUrl = String(p['serverUrl']).replace(/\/+$/, '');
             const username = String(p['username']);
             const password = String(p['password']);
-            const xtreamUrl = `${serverUrl}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=m3u8`;
+            const outputFormat =
+                typeof req.query['output'] === 'string' && req.query['output'].trim()
+                    ? req.query['output'].trim()
+                    : 'ts';
+            let xtreamUrl = `${serverUrl}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=${encodeURIComponent(outputFormat)}`;
+            if (typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()) {
+                xtreamUrl += `&stream_type=${encodeURIComponent(req.query['stream_type'].trim())}`;
+            }
             await streamXtreamM3u(xtreamUrl, proxyBase, serverToken, res);
             continue;
         }

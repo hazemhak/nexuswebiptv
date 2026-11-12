@@ -90,9 +90,9 @@ async function handleStreamProxy(
     }
 
     const userAgent =
-        typeof req.query['userAgent'] === 'string'
+        typeof req.query['userAgent'] === 'string' && req.query['userAgent'].trim()
             ? req.query['userAgent'].trim()
-            : undefined;
+            : selectDefaultUserAgent(req.headers['user-agent']);
 
     // Forward select browser request headers upstream (e.g. Range for seeking)
     const forwardedRequestHeaders: Record<string, string> = {};
@@ -287,6 +287,11 @@ async function rewriteAndSendM3u8(
     }
 
     const proxyBase = buildProxyBase(req);
+    const token = typeof req.query['token'] === 'string' ? req.query['token'] : '';
+    const userAgent = typeof req.query['userAgent'] === 'string' ? req.query['userAgent'] : '';
+    const extraParams =
+        (token ? `&token=${encodeURIComponent(token)}` : '') +
+        (userAgent ? `&userAgent=${encodeURIComponent(userAgent)}` : '');
 
     const rewritten = body
         .split('\n')
@@ -303,7 +308,7 @@ async function rewriteAndSendM3u8(
                     } catch {
                         return _match;
                     }
-                    return `URI="${proxyBase}/stream-proxy?url=${encodeURIComponent(resolved)}"`;
+                    return `URI="${proxyBase}/stream-proxy?url=${encodeURIComponent(resolved)}${extraParams}"`;
                 });
             }
 
@@ -314,13 +319,31 @@ async function rewriteAndSendM3u8(
             } catch {
                 return line; // leave malformed lines alone
             }
-            return `${proxyBase}/stream-proxy?url=${encodeURIComponent(resolved)}`;
+            return `${proxyBase}/stream-proxy?url=${encodeURIComponent(resolved)}${extraParams}`;
         })
         .join('\n');
 
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
     res.removeHeader('Content-Length'); // body length changed
     res.send(rewritten);
+}
+
+function selectDefaultUserAgent(headerVal: unknown): string {
+    if (typeof headerVal === 'string' && headerVal.trim()) {
+        const lower = headerVal.toLowerCase();
+        if (
+            lower.includes('vlc') ||
+            lower.includes('kodi') ||
+            lower.includes('tivimate') ||
+            lower.includes('smarters') ||
+            lower.includes('exoplayer') ||
+            lower.includes('lavf') ||
+            lower.includes('applecoremedia')
+        ) {
+            return headerVal.trim();
+        }
+    }
+    return 'IPTVSmarters/2.2.2.1';
 }
 
 function buildProxyBase(req: Request): string {
