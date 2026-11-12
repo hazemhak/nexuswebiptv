@@ -31,7 +31,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideFormFieldDefaults } from '@iptvnator/ui/components/form-field-defaults';
 import { SettingsActivitySectionComponent } from './settings-activity-section.component';
-import { PlaylistsService, ServerStorageStatusService } from '@iptvnator/services';
+import { PlaylistsService, ServerStorageStatusService, readServerAccessToken } from '@iptvnator/services';
 import { createRandomId, type Playlist } from '@iptvnator/shared/interfaces';
 import {
     normalizeSourceServerUrl,
@@ -81,12 +81,17 @@ export class SettingsServerSectionComponent {
     readonly allPlaylists = signal<Playlist[]>([]);
     readonly selectedExportPlaylist = signal<string>('all');
     readonly copiedApiUrl = signal<boolean>(false);
+    readonly serverToken = signal<string>(readServerAccessToken() || '');
 
     readonly exportedApiUrl = computed(() => {
         const origin = window.location.origin;
         const target = this.selectedExportPlaylist();
         const path = target === 'all' ? '/api/m3u' : `/api/m3u/${encodeURIComponent(target)}`;
-        const token = this.serverStatusService.accessToken();
+        const token =
+            this.serverToken().trim() ||
+            this.serverStatusService.accessToken() ||
+            readServerAccessToken() ||
+            '';
         return token ? `${origin}${path}?token=${encodeURIComponent(token)}` : `${origin}${path}`;
     });
 

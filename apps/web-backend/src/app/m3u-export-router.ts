@@ -34,11 +34,9 @@ export function createM3uExportRouter(
         if (!accessToken) {
             return next();
         }
-        const queryToken = typeof req.query['token'] === 'string' ? req.query['token'].trim() : '';
-        const authHeader = req.headers.authorization;
-        const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
-        if (queryToken === accessToken || bearerToken === accessToken) {
+        const providedToken = extractRequestToken(req);
+        if (providedToken === accessToken) {
             return next();
         }
 
@@ -143,4 +141,37 @@ function getProxyBaseUrl(req: Request): string {
 
 function escapeAttr(val: string): string {
     return val.replace(/"/g, "'");
+}
+
+function extractRequestToken(req: Request): string {
+    const query = req.query;
+    const fromQuery =
+        (typeof query['token'] === 'string' ? query['token'] : '') ||
+        (typeof query['access_token'] === 'string' ? query['access_token'] : '') ||
+        (typeof query['auth'] === 'string' ? query['auth'] : '') ||
+        (typeof query['key'] === 'string' ? query['key'] : '') ||
+        (typeof query['password'] === 'string' ? query['password'] : '') ||
+        (typeof query['pass'] === 'string' ? query['pass'] : '');
+
+    if (fromQuery.trim()) {
+        return fromQuery.trim();
+    }
+
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+        if (authHeader.startsWith('Bearer ')) {
+            return authHeader.slice(7).trim();
+        }
+        if (authHeader.startsWith('Basic ')) {
+            try {
+                const decoded = Buffer.from(authHeader.slice(6).trim(), 'base64').toString('utf8');
+                const parts = decoded.split(':');
+                return parts[1]?.trim() || parts[0]?.trim() || '';
+            } catch {
+                // Ignore decoding failure
+            }
+        }
+    }
+
+    return '';
 }
