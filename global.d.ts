@@ -17,6 +17,7 @@ declare global {
     interface Window {
         __IPTVNATOR_CONFIG__?: {
             BACKEND_URL?: string;
+            STREAM_PROXY_ENABLED?: boolean;
         };
         electron: ElectronBridgeApi;
         process: NodeJS.Process;

@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
     PortalRailLink,
@@ -16,6 +16,8 @@ import {
 import {
     type ServerConnectionState,
     ServerStorageStatusService,
+    clearServerAccessToken,
+    SERVER_SIGN_IN_PATH,
 } from '@iptvnator/services';
 import { WorkspaceShellRailLinksComponent } from '../workspace-shell-rail-links/workspace-shell-rail-links.component';
 
@@ -33,6 +35,9 @@ import { WorkspaceShellRailLinksComponent } from '../workspace-shell-rail-links/
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WorkspaceShellRailComponent {
+    private readonly router = inject(Router);
+    private readonly serverStatus = inject(ServerStorageStatusService);
+
     readonly isMacOS = input(false);
     readonly workspaceLinks = input<PortalRailLink[]>([]);
     readonly primaryContextLinks = input<PortalRailLink[]>([]);
@@ -44,11 +49,22 @@ export class WorkspaceShellRailComponent {
     readonly isSettingsRoute = input(false);
 
     /** Self-hosted server storage: hidden while `inactive`. */
-    readonly serverState = inject(ServerStorageStatusService).state;
+    readonly serverState = this.serverStatus.state;
     readonly serverIcon = computed(() => SERVER_ICONS[this.serverState()]);
     readonly serverLabelKey = computed(
         () => SERVER_LABEL_KEYS[this.serverState()]
     );
+
+    /** Show sign out button when server storage is active and user is signed in */
+    readonly canSignOut = computed(
+        () => this.serverState() === 'online' || this.serverState() === 'offline'
+    );
+
+    signOut(): void {
+        clearServerAccessToken();
+        this.serverStatus.reportUnauthorized();
+        void this.router.navigateByUrl(SERVER_SIGN_IN_PATH);
+    }
 }
 
 const SERVER_ICONS: Record<ServerConnectionState, string> = {

@@ -27,9 +27,11 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { SettingsSyncStatusComponent } from './settings-sync-status.component';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideFormFieldDefaults } from '@iptvnator/ui/components/form-field-defaults';
 import { SettingsActivitySectionComponent } from './settings-activity-section.component';
+import { PlaylistsService, ServerStorageStatusService } from '@iptvnator/services';
 import { createRandomId, type Playlist } from '@iptvnator/shared/interfaces';
 import {
     normalizeSourceServerUrl,
@@ -61,6 +63,7 @@ import {
         MatButtonModule,
         MatFormFieldModule,
         MatInputModule,
+        MatSelectModule,
         TranslateModule,
     ],
     templateUrl: './settings-server-section.component.html',
@@ -72,6 +75,47 @@ export class SettingsServerSectionComponent {
     readonly sync = inject(SourceSyncService);
     readonly supportsHosting = inject(RuntimeCapabilitiesService)
         .supportsHostedServer;
+    private readonly playlistsService = inject(PlaylistsService);
+    private readonly serverStatusService = inject(ServerStorageStatusService);
+
+    readonly allPlaylists = signal<Playlist[]>([]);
+    readonly selectedExportPlaylist = signal<string>('all');
+    readonly copiedApiUrl = signal<boolean>(false);
+
+    readonly exportedApiUrl = computed(() => {
+        const origin = window.location.origin;
+        const target = this.selectedExportPlaylist();
+        const path = target === 'all' ? '/api/m3u' : `/api/m3u/${encodeURIComponent(target)}`;
+        const token = this.serverStatusService.accessToken();
+        return token ? `${origin}${path}?token=${encodeURIComponent(token)}` : `${origin}${path}`;
+    });
+
+    constructor() {
+        this.loadPlaylists();
+    }
+
+    private loadPlaylists(): void {
+        this.playlistsService.getAllPlaylists().subscribe({
+            next: (playlists: Playlist[]) => {
+                this.allPlaylists.set(playlists ?? []);
+            },
+            error: () => {
+                this.allPlaylists.set([]);
+            },
+        });
+    }
+
+    async copyExportUrl(): Promise<void> {
+        const url = this.exportedApiUrl();
+        if (!url) return;
+        try {
+            await navigator.clipboard.writeText(url);
+            this.copiedApiUrl.set(true);
+            setTimeout(() => this.copiedApiUrl.set(false), 2500);
+        } catch {
+            // Clipboard write fallback
+        }
+    }
 
     readonly hostedServer = viewChild(SettingsHostedServerComponent);
     readonly localServerUrl = computed(

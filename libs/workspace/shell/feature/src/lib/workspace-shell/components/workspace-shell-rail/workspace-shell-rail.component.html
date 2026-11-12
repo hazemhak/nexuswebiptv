@@ -47,5 +47,18 @@
         >
             <mat-icon aria-hidden="true">settings</mat-icon>
         </a>
+        @if (canSignOut()) {
+            <button
+                type="button"
+                class="rail-shortcut nav-item rail-sign-out"
+                (click)="signOut()"
+                [matTooltip]="'SERVER_STORAGE.SERVER_SIGN_OUT' | translate"
+                [matTooltipPosition]="'right'"
+                [attr.aria-label]="'SERVER_STORAGE.SERVER_SIGN_OUT' | translate"
+                data-test-id="rail-sign-out"
+            >
+                <mat-icon aria-hidden="true">logout</mat-icon>
+            </button>
+        }
     </div>
 </aside>

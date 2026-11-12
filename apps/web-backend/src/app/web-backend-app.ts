@@ -1,4 +1,6 @@
 import { mountTvSetup } from './tv-setup/pairing-router';
+import { mountStreamProxy } from './stream-proxy-router';
+import { createM3uExportRouter } from './m3u-export-router';
 import cors from 'cors';
 import express, { Express, Request, Response } from 'express';
 import { ProviderTargetRegistry } from './provider-target-registry';
@@ -138,19 +140,34 @@ export function createWebBackendApp(
         optionsSuccessStatus: 200,
     });
 
-    app.get('/', (_req, res) => res.send('IPTVnator web backend'));
+    app.get('/', (_req, res) => res.send('Nexus Web IPTV backend'));
     app.get('/health', (_req, res) =>
-        res.json({ status: 'ok', service: 'iptvnator-web-backend' })
+        res.json({ status: 'ok', service: 'nexus-web-iptv-backend' })
     );
 
     app.get('/config.js', corsMiddleware, (_req, res) => {
-        const config = JSON.stringify({ BACKEND_URL: runtimeBackendUrl });
+        const streamProxyEnabled = isStreamProxyEnabled();
+        const config = JSON.stringify({
+            BACKEND_URL: runtimeBackendUrl,
+            STREAM_PROXY_ENABLED: streamProxyEnabled,
+        });
         res.type('application/javascript').send(
             `window.__IPTVNATOR_CONFIG__ = Object.assign({}, window.__IPTVNATOR_CONFIG__, ${config});\n`
         );
     });
 
     mountTvSetup(app, corsMiddleware, options.accessToken ?? null);
+
+    // Stream proxy: pipe IPTV streams through the server so all video traffic
+    // originates from the host device rather than the user's browser.
+    // Endpoint: GET /stream-proxy?url=<encoded-stream-url>
+    app.options('/stream-proxy', corsMiddleware);
+    mountStreamProxy(app, providerUrlPolicy);
+
+    // M3U export: allows external players (TiviMate, VLC, Kodi) to pull
+    // playlists with all streams rewritten through the server proxy.
+    // Endpoints: GET /m3u, GET /m3u/:id
+    app.use(corsMiddleware, createM3uExportRouter(options.storage ?? null, options.accessToken ?? null));
 
     mountServerStorage(app, {
         corsMiddleware,
@@ -512,6 +529,17 @@ function getRegisteredProviderUrl(
 
 function isPrivateNetworkProxyAllowed(): boolean {
     const value = process.env['IPTVNATOR_PROXY_ALLOW_PRIVATE_NETWORKS'];
+    return value === '1' || value === 'true';
+}
+
+function isStreamProxyEnabled(): boolean {
+    const value = process.env['IPTVNATOR_STREAM_PROXY'];
+    // Default to enabled in production (Docker); disabled in dev to avoid
+    // breaking the existing direct-browser workflow unless opted in.
+    if (value === undefined) {
+        return process.env['NODE_ENV'] !== 'development' &&
+               process.env['NODE_ENV'] !== 'dev';
+    }
     return value === '1' || value === 'true';
 }
 

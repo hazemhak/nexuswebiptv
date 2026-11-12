@@ -1,153 +1,133 @@
-# IPTVnator
+# Nexus Web IPTV 📺
 
-<p align="center">
-  <img src="./apps/web/src/assets/icons/favicon.256x256.png" width="96" height="96" alt="IPTVnator icon" />
-</p>
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](docker/docker-compose.yml)
 
-**A free, open-source IPTV player for macOS, Windows, Linux and the browser.**
-Bring your M3U playlists, Xtream Codes account or Stalker portal to watch live
-TV, browse movies and series, and pick up where you left off.
+**Nexus Web IPTV** is a self-hosted, full-featured web-based IPTV player and media gateway. It provides a modern browser player for M3U playlists and Xtream Codes with a **server-side stream proxy** that keeps your home/client IP private, bypasses ISP blocks, and allows external players to stream through your VPS.
 
-**[Download](https://4gray.github.io/iptvnator/download/)** ·
-[Website](https://4gray.github.io/iptvnator/) ·
-[Getting started](https://4gray.github.io/iptvnator/guides/) ·
-[Gallery](docs/screenshots.md)
+---
 
-[![Release](https://img.shields.io/github/v/release/4gray/iptvnator)](https://github.com/4gray/iptvnator/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/4gray/iptvnator/ci.yml?branch=master&label=CI)](https://github.com/4gray/iptvnator/actions/workflows/ci.yml)
-[![Downloads](https://img.shields.io/github/downloads/4gray/iptvnator/total)](https://github.com/4gray/iptvnator/releases)
+## ✨ Features
 
-![IPTVnator dashboard with continue watching and live favorites in light and dark themes](./apps/website/public/screenshots/dashboard-themes.webp)
+- 🌐 **Web PWA Player**: Run anywhere in your browser (desktop, tablet, mobile).
+- 🛡️ **Server-Side Stream Proxy**:
+  - All video playback traffic routes through your host VPS rather than the user's browser.
+  - Automatically parses and rewrites HLS (`.m3u8`) manifests so TS segments are fetched through the proxy.
+  - Transparently pipes MPEG-TS, MP4, and raw byte streams with range requests (seeking support).
+  - Built-in SSRF and private-network protection.
+- 📡 **M3U Export & Relayed API for External Players**:
+  - Connect external IPTV apps (**TiviMate, IPTV Smarters, VLC, Kodi, Smart TVs**) directly to your Nexus Web IPTV server.
+  - Generate whole-library or single-playlist M3U URLs directly from the Settings UI.
+  - All video streams accessed by external apps are proxied through your server.
+- 🔒 **Password Protection & One-Click Sign Out**:
+  - Protect your instance with a global access token (`IPTVNATOR_ACCESS_TOKEN`).
+  - Sign-in screen (`/server-sign-in`) and logout button directly in the navigation rail.
+- 📺 **Rich IPTV Features**:
+  - Full support for **M3U** and **M3U8** playlists.
+  - **Xtream Codes** API support (Live TV, VOD, Series).
+  - **EPG (Electronic Program Guide)** support with XMLTV / XML.GZ parsing.
+  - TV Archive / Catchup playback.
+  - Multi-language interface, dark/light themes, and favorites management.
 
-> [!IMPORTANT]
-> IPTVnator is a **player**: it does not provide or sell subscriptions, channels,
-> playlists or other media. Screenshots show demonstration content. Download
-> only from the [official website](https://4gray.github.io/iptvnator/) or
-> [GitHub Releases](https://github.com/4gray/iptvnator/releases).
-> [Learn about unofficial websites](https://4gray.github.io/iptvnator/blog/beware-unofficial-iptvnator-websites/).
+---
 
-## Download
+## 🚀 Quick Start with Docker (Recommended)
 
-Get the latest stable desktop release from the
-[download page](https://4gray.github.io/iptvnator/download/) or
-[GitHub Releases](https://github.com/4gray/iptvnator/releases).
+### 1. Prerequisites
+- Docker & Docker Compose installed on your host / VPS.
 
-| macOS | Windows | Linux |
-| --- | --- | --- |
-| [Apple Silicon / Intel](https://4gray.github.io/iptvnator/download/macos/) | [Installer / portable](https://4gray.github.io/iptvnator/download/windows/) | [AppImage, deb, rpm and more](https://4gray.github.io/iptvnator/download/linux/) |
-
-For package-manager commands, experimental Linux Embedded MPV support and
-nightly builds, see [Installation](docs/installation.md).
-
-## Features
-
-- **Your sources together:** local or remote M3U/M3U8 playlists, Xtream Codes,
-  and Stalker / Ministra portals.
-- **Live TV:** channel groups, search and favorites; XMLTV guide, multi-channel
-  EPG and catch-up on desktop.
-- **Movies and series:** posters, seasons, watch history and resume positions;
-  optional TMDB metadata with your own API key.
-- **Playback options:** built-in web players, external MPV/VLC/IINA and
-  experimental Embedded MPV on desktop.
-- **Watch later:** desktop downloads for movies and episodes, plus
-  continue-watching and favorites across sources.
-- **Make it yours:** light and dark themes, 21 language options, keyboard
-  shortcuts and a command palette (`Ctrl/Cmd+K`).
-- **Use your screen:** desktop apps, a self-hosted PWA and a phone remote for
-  the desktop player.
-
-[Full feature list and platform limits](docs/features.md) ·
-[Keyboard shortcuts](docs/keyboard-shortcuts.md) ·
-[All screenshots](docs/screenshots.md)
-
-## Self-hosted PWA
-
-Run the browser app and its backend together with Docker:
+### 2. Run with Docker Compose
+Clone the repository and start the container:
 
 ```bash
-docker compose -f docker/docker-compose.yml up --build -d
+git clone https://github.com/hazemhak/nexuswebiptv.git
+cd nexuswebiptv/docker
+docker compose up -d --build
 ```
 
-Open <http://localhost:4333>. No separate backend container is needed. You can
-also [run a server from the desktop app](docker/README.md#run-the-server-from-the-desktop-app).
-Connected clients can share sources. Favorites, Recently Viewed and supported
-watch progress each have their own synchronization opt-in.
+Access the app in your browser at:
+👉 **`http://YOUR_SERVER_IP:4333`**
 
-The PWA does not include M3U XMLTV, Embedded MPV, managed external-player
-launching, the download manager or Electron remote-control features.
-See [Docker setup and client connections](docker/README.md) for configuration,
-reverse proxies, playback troubleshooting and platform limits.
+---
 
-## Smart TV
+## ⚙️ Configuration (`docker/docker-compose.yml`)
 
-### LG webOS and Samsung Tizen
+```yaml
+services:
+  iptvnator:
+    image: nexuswebiptv:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4333:80"
+    environment:
+      BACKEND_URL: /api
+      CLIENT_URL: http://localhost:4333        # Set to http://YOUR_VPS_IP:4333 in production
+      PORT: "3000"
+      IPTVNATOR_STORAGE: server
+      IPTVNATOR_STREAM_PROXY: "1"              # 1 = All video streams route through VPS
+      IPTVNATOR_ACCESS_TOKEN: admin123         # Web login password (leave empty to disable)
+      IPTVNATOR_PROXY_ALLOW_PRIVATE_NETWORKS: "0" # Set to "1" if your IPTV server is on a LAN IP
+    volumes:
+      - iptvnator-data:/data
+```
 
-LG webOS and Samsung Tizen share a dedicated, experimental TV client for M3U,
-Xtream Codes and Stalker / Ministra sources. It requires a compatible IPTVnator
-web backend. Build and install the package for your TV in Developer Mode.
+### Environment Variables
 
-- [LG webOS installation](apps/tv/README.md#installation)
-- [Samsung Tizen installation and signing](apps/tv/tizen/README.md)
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `IPTVNATOR_STREAM_PROXY` | `1` | `1` to route all video traffic through your server; `0` to stream direct from browser. |
+| `IPTVNATOR_ACCESS_TOKEN` | `admin123` | Password required to access the web app. |
+| `IPTVNATOR_STORAGE` | `server` | Saves playlists and viewing state to persistent server database (`/data`). |
+| `CLIENT_URL` | `http://localhost:4333` | Allowed origin for web clients (set to your domain or VPS IP). |
+| `IPTVNATOR_PROXY_ALLOW_PRIVATE_NETWORKS`| `0` | Set `1` if your IPTV sources are on local private IPs (e.g. `192.168.x.x`). |
 
-Add sources from your phone by scanning a QR code, or connect the TV to your
-self-hosted IPTVnator source library. Favorites, history and resume positions
-currently stay on the TV.
+---
 
-See the [TV README](apps/tv/README.md) for compatibility, phone setup, source
-synchronization and screenshots.
+## 📱 Connecting External Players (TiviMate, Smarters, VLC)
 
-### Fire TV / Android TV shell (experimental)
+You can use Nexus Web IPTV as your personal IPTV proxy server for external devices:
 
-The Android shell bundles the same PWA used in the browser with an embedded
-backend. It's designed primarily for Fire TV Stick and Android TV devices with a
-D-pad remote. You can try it on tablets. Compact phone screens still need layout
-work.
+1. Open Nexus Web IPTV in your browser: `http://YOUR_SERVER_IP:4333`.
+2. Go to **Settings** ➔ **Server / Source Sync**.
+3. Scroll to **External App M3U & Stream Proxy API**:
+   - Choose **All Playlists (Merged)** or an individual playlist.
+   - Click **Copy API Link**.
+4. Paste the copied URL into **TiviMate**, **IPTV Smarters**, or **VLC**:
+   ```
+   http://YOUR_SERVER_IP:4333/api/m3u?token=admin123
+   ```
+*Every channel played through that URL will stream through your VPS, protecting your client network.*
 
-The `Build TV shell APK` workflow can publish a GitHub release, marked as a
-pre-release by default. For APK builds, installation and remote controls, see
-the [Android shell guide](./tv-shell/README.md).
+---
 
-### Enigma2 receivers
+## 🛠️ Local Development
 
-Dreaminator is a standalone IPTV plugin and browser-based playlist manager for
-Enigma2 receivers. Organize channels in a browser and watch with the receiver's
-remote. Tested on the Dreambox DM520 and Vu+ Uno 4K SE.
+### Requirements
+- Node.js 22+ or 24+
+- `pnpm` (`npm install -g pnpm@10.33.0`)
 
-[Dreaminator on GitHub](https://github.com/4gray/dreaminator) ·
-[Dreaminator on the IPTVnator blog](https://4gray.github.io/iptvnator/blog/dreaminator-enigma2/)
+### Setup
+```bash
+git clone https://github.com/hazemhak/nexuswebiptv.git
+cd nexuswebiptv
 
-## Help and development
+pnpm install --frozen-lockfile
+```
 
-- [User guides](https://4gray.github.io/iptvnator/guides/) — sources, EPG,
-  playback, downloads and updates.
-- [Troubleshooting](docs/troubleshooting.md) — macOS and Linux startup fixes.
-- [Build and develop](docs/development/README.md) — Node/pnpm setup, local
-  Electron/PWA runs and diagnostics.
-- [Developer and agent documentation](docs/maintenance/agent-context-map.md) —
-  subsystem contracts; [AGENTS.md](AGENTS.md) and the
-  [agent workflow](docs/development/agent-workflow.md) cover contribution rules.
-- [Report a bug](https://github.com/4gray/iptvnator/issues) or join
-  [Telegram](https://t.me/iptvnator) / [Bluesky](https://bsky.app/profile/iptvnator.bsky.social).
+### Start Development Servers
+```bash
+# Terminal 1: Backend API & Stream Proxy
+pnpm run serve:backend
 
-## Support the project
+# Terminal 2: Angular Frontend PWA
+pnpm run serve:frontend
+```
 
-Support development through [GitHub Sponsors](https://github.com/sponsors/4gray),
-[Ko-fi](https://ko-fi.com/4gray), or a star on GitHub.
+---
 
-## Contributors
+## 📜 Acknowledgements & License
 
-[![GitHub commit contributors](https://img.shields.io/github/contributors/4gray/iptvnator)](https://github.com/4gray/iptvnator/graphs/contributors)
-
-<details>
-<summary>Show contributors</summary>
-
-[![Contributor avatars](https://contrib.rocks/image?repo=4gray/iptvnator)](https://github.com/4gray/iptvnator/graphs/contributors)
-
-</details>
-
-## License and trademark
-
-The source code is [MIT licensed](LICENSE.md). The IPTVnator name and logo are
-unregistered trademarks of the project owner and are not covered by that
-license. Forks and redistributions, including app-store submissions, must use
-a different name and their own icon. See [TRADEMARK.md](TRADEMARK.md).
+Based on the open-source [4gray/iptvnator](https://github.com/4gray/iptvnator) project. Distributed under the [MIT License](LICENSE.md).

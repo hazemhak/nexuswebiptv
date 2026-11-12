@@ -265,6 +265,75 @@
         </p>
     </div>
 </section>
+
+<!-- M3U Stream Proxy API Generator -->
+<section class="settings-group server-group" id="m3u-export-api">
+    <header class="settings-group__header server-header">
+        <h2>External App M3U & Stream Proxy API</h2>
+        <p>
+            Generate an M3U playlist URL to connect other IPTV applications (TiviMate, IPTV Smarters, VLC, Kodi, Smart TVs). All video streams in this URL are routed through your server.
+        </p>
+    </header>
+    <div class="settings-card server-fields">
+        <mat-form-field appearance="outline">
+            <mat-label>Playlist Selection</mat-label>
+            <mat-select
+                [value]="selectedExportPlaylist()"
+                (selectionChange)="selectedExportPlaylist.set($event.value)"
+            >
+                <mat-option value="all">
+                    All Playlists (Merged)
+                </mat-option>
+                @for (pl of allPlaylists(); track pl._id) {
+                    <mat-option [value]="pl._id">
+                        {{ pl.title || 'Untitled Playlist' }} ({{ pl.count || 0 }} channels)
+                    </mat-option>
+                }
+            </mat-select>
+            <mat-hint>Choose whether to export all channels or a single playlist</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+            <mat-label>Generated M3U Stream API URL</mat-label>
+            <input
+                matInput
+                readonly
+                [value]="exportedApiUrl()"
+                #exportUrlInput
+                (click)="exportUrlInput.select()"
+            />
+            <button
+                mat-icon-button
+                matSuffix
+                type="button"
+                (click)="copyExportUrl()"
+                [attr.aria-label]="'Copy API URL'"
+            >
+                <mat-icon>{{ copiedApiUrl() ? 'check' : 'content_copy' }}</mat-icon>
+            </button>
+            <mat-hint>
+                @if (copiedApiUrl()) {
+                    <span style="color: var(--app-success-text, #4caf50);">Copied to clipboard!</span>
+                } @else {
+                    Paste this link into TiviMate, IPTV Smarters, VLC or any IPTV player.
+                }
+            </mat-hint>
+        </mat-form-field>
+
+        <div class="server-actions">
+            <button
+                type="button"
+                mat-flat-button
+                class="settings-primary-button"
+                (click)="copyExportUrl()"
+            >
+                <mat-icon>{{ copiedApiUrl() ? 'check' : 'content_copy' }}</mat-icon>
+                {{ copiedApiUrl() ? 'Copied' : 'Copy API Link' }}
+            </button>
+        </div>
+    </div>
+</section>
+
 @if (sync.connection) {
     <app-settings-activity-section />
     <app-settings-favorites-section />

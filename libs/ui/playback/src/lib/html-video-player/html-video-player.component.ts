@@ -57,6 +57,7 @@ import {
     type HtmlVideoControlsSource,
 } from './html-video-player-controls.bridge';
 import type { PlayerTimeUpdate } from '../playback-history/player-time-update';
+import { StreamProxyService } from '@iptvnator/services';
 
 const debugHtmlPlayer = createDevLogger('HtmlVideoPlayer');
 
@@ -101,6 +102,7 @@ export class HtmlVideoPlayerComponent implements OnInit, OnChanges, OnDestroy {
 
     readonly sharedControls = inject(WEB_PLAYER_SHARED_CONTROLS);
     readonly controlsAdapter = inject(WebVideoControlsAdapter);
+    private readonly streamProxy = inject(StreamProxyService);
     private readonly seriesNavigationSignal =
         signal<SeriesPlaybackNavigation | null>(null);
 
@@ -208,7 +210,10 @@ export class HtmlVideoPlayerComponent implements OnInit, OnChanges, OnDestroy {
         clearNativeVideoSources(this.videoPlayer.nativeElement);
         if (channel.url) {
             this.playbackIssue.emit(null);
-            const url = channel.url + (channel.epgParams ?? '');
+            const url = this.streamProxy.rewrite(
+                channel.url + (channel.epgParams ?? ''),
+                channel.http?.['user-agent'] ?? undefined
+            );
             const sourceKind = resolvePlaybackUrlSourceKind(channel.url);
 
             // The scoped Electron header override is owned by

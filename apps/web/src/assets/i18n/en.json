@@ -37,7 +37,7 @@
     "SHOW_LESS": "Less",
     "PLAYLISTS": "Playlists",
     "HOME": {
-        "TITLE": "IPTVnator",
+        "TITLE": "Nexus Web IPTV",
         "SUBTITLE": "Please select a playlist from the list or add a new playlist",
         "TABS": {
             "RECENTLY_ADDED": "Recently added playlists",
@@ -53,7 +53,7 @@
             "UNTITLED_PLAYLIST": "Untitled playlist",
             "PLAYLIST_ACTIONS": "Playlist actions",
             "ADD_FIRST": "Please add your first playlist",
-            "WELCOME_TITLE": "Welcome to IPTVnator",
+            "WELCOME_TITLE": "Welcome to Nexus Web IPTV",
             "WELCOME_DESCRIPTION": "Start your streaming journey by adding your first playlist. Connect to your favorite IPTV service and enjoy live TV, movies, and series.",
             "ADD_YOUR_FIRST": "Add Your First Playlist",
             "FEATURE_M3U": "M3U/M3U8 Files",
@@ -779,7 +779,7 @@
         "MIGRATION_FAILED": "Moving failed. Your playlists are still in this browser; try again from Settings → Server.",
         "MIGRATION_RELOAD": "Reload",
         "SIGN_IN_TITLE": "Access token required",
-        "SIGN_IN_DESCRIPTION": "This IPTVnator server asks for an access token before it shows your playlists.",
+        "SIGN_IN_DESCRIPTION": "This Nexus Web IPTV server asks for an access token before it shows your playlists.",
         "SIGN_IN_TOKEN_LABEL": "Access token",
         "SIGN_IN_HINT": "Find it in the server's IPTVNATOR_ACCESS_TOKEN setting.",
         "SIGN_IN_REJECTED": "Token rejected. Check it and try again.",

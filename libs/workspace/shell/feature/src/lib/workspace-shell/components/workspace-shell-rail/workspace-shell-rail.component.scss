@@ -182,6 +182,12 @@
             color: var(--app-on-surface);
         }
     }
+
+    button.rail-shortcut {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+    }
 }
 
 @media (max-width: 640px) {

@@ -16,8 +16,12 @@ services:
       # Server storage database on the /data volume. Set to "none" to keep
       # the backend stateless.
       IPTVNATOR_STORAGE: server
-      # Ask every browser for this token once before it shows the library.
-      # IPTVNATOR_ACCESS_TOKEN: change-me
+      # Route all IPTV stream traffic through the server instead of the
+      # user's browser. Set to "1" to enable (default: enabled in Docker).
+      IPTVNATOR_STREAM_PROXY: "1"
+      # Login password to protect the web app. Anyone opening the app
+      # must enter this password to view channels or access the app.
+      IPTVNATOR_ACCESS_TOKEN: admin123
     volumes:
       - iptvnator-data:/data
     healthcheck:
