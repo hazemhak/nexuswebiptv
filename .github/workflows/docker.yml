@@ -1,128 +1,71 @@
-name: docker-build
+name: Build & Push Docker Image
 
 on:
-    pull_request:
-        paths:
-            - '.github/workflows/docker.yml'
-            - 'apps/web/**'
-            - 'apps/web-backend/**'
-            - 'docker/**'
-            - 'libs/**'
-            - 'package.json'
-            - 'pnpm-lock.yaml'
     push:
         branches:
-            - master
+            - main
         tags:
             - 'v*'
     workflow_dispatch:
         inputs:
             push:
-                description: 'Push the image to Docker Hub'
+                description: 'Push to Docker Hub'
                 required: true
                 type: boolean
-                default: false
+                default: true
 
 permissions:
     contents: read
 
-# Superseded PR pushes cancel their still-running image build. Master/tag/
-# manual runs get a unique group (run_id): GitHub keeps at most one pending
-# run per group even with cancel-in-progress: false, so a shared ref group
-# could silently drop a queued publish between two rapid master pushes.
-concurrency:
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-    build:
-        name: Build Docker image
+    build-and-push:
+        name: Build & Publish Docker Image
         runs-on: ubuntu-latest
         timeout-minutes: 90
 
         steps:
-            - name: Checkout
-              uses: actions/checkout@v7
+            - name: Checkout Code
+              uses: actions/checkout@v4
 
             - name: Setup Node.js
-              uses: actions/setup-node@v7
+              uses: actions/setup-node@v4
               with:
-                  node-version-file: '.nvmrc'
+                  node-version: 22
 
-            - name: Prepare Docker metadata
-              id: docker-meta
-              shell: bash
-              run: |
-                  set -euo pipefail
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
 
-                  version="$(node -p "require('./package.json').version")"
-                  short_sha="${GITHUB_SHA::12}"
-                  publish="false"
-                  platforms="linux/amd64"
-                  tags="4gray/iptvnator:pr-${{ github.event.pull_request.number || 'manual' }}"
-
-                  if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/master" ]]; then
-                    publish="true"
-                    platforms="linux/amd64,linux/arm64"
-                    tags=$(cat <<TAGS
-                  4gray/iptvnator:latest
-                  4gray/iptvnator:${version}-pwa
-                  4gray/iptvnator:${version}-pwa-${short_sha}
-                  4gray/iptvnator:sha-${short_sha}
-                  TAGS
-                  )
-                  elif [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/v* ]]; then
-                    publish="true"
-                    platforms="linux/amd64,linux/arm64"
-                    tag_version="${GITHUB_REF_NAME#v}"
-                    tags=$(cat <<TAGS
-                  4gray/iptvnator:${tag_version}
-                  4gray/iptvnator:v${tag_version}
-                  TAGS
-                  )
-                    if [[ "${tag_version}" != *-* ]]; then
-                      tags="${tags}"$'\n'"4gray/iptvnator:stable"
-                    fi
-                  elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${{ inputs.push }}" == "true" ]]; then
-                    publish="true"
-                    platforms="linux/amd64,linux/arm64"
-                    tags=$(cat <<TAGS
-                  4gray/iptvnator:manual-${short_sha}
-                  4gray/iptvnator:sha-${short_sha}
-                  TAGS
-                  )
-                  fi
-
-                  {
-                    echo "publish=${publish}"
-                    echo "platforms=${platforms}"
-                    echo "tags<<EOF"
-                    echo "${tags}"
-                    echo "EOF"
-                  } >> "${GITHUB_OUTPUT}"
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
             - name: Login to Docker Hub
-              if: steps.docker-meta.outputs.publish == 'true'
-              uses: docker/login-action@v4
+              uses: docker/login-action@v3
               with:
                   username: ${{ secrets.DOCKERHUB_USERNAME }}
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v4
+            - name: Determine Docker Tags
+              id: meta
+              shell: bash
+              run: |
+                  REPO_USER="${{ secrets.DOCKERHUB_USERNAME }}"
+                  IMAGE_NAME="${REPO_USER:-hazemhak}/nexuswebiptv"
+                  TAGS="${IMAGE_NAME}:latest"
+                  
+                  if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+                      TAG_VERSION="${GITHUB_REF_NAME#v}"
+                      TAGS="${TAGS},${IMAGE_NAME}:${TAG_VERSION}"
+                  fi
 
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v4
+                  echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
-            - name: Build Docker image
-              uses: docker/build-push-action@v7
+            - name: Build and Push Docker Image
+              uses: docker/build-push-action@v5
               with:
                   context: .
                   file: ./docker/Dockerfile
-                  push: ${{ steps.docker-meta.outputs.publish == 'true' }}
-                  tags: ${{ steps.docker-meta.outputs.tags }}
-                  platforms: ${{ steps.docker-meta.outputs.platforms }}
-                  build-args: |
-                      BUILD_COMMIT=${{ github.event.pull_request.head.sha || github.sha }}
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  platforms: linux/amd64,linux/arm64
                   cache-from: type=gha
-                  cache-to: type=gha,mode=max,ignore-error=true
+                  cache-to: type=gha,mode=max
