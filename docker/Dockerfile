@@ -26,6 +26,7 @@ COPY . .
 ARG BUILD_COMMIT=""
 RUN node tools/build/inject-build-commit.mjs
 
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm nx build web --configuration=pwa
 RUN pnpm nx build web-backend
 
