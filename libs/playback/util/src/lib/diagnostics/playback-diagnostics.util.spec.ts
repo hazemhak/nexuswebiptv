@@ -744,6 +744,29 @@ describe('playback diagnostics', () => {
         ).toBe('');
     });
 
+    it('resolves media extensions from proxied stream URLs', () => {
+        expect(
+            getPlaybackMediaExtensionFromUrl(
+                '/api/stream-proxy?url=http%3A%2F%2Fcdn.example%2Flive%2Fstream.m3u8'
+            )
+        ).toBe('m3u8');
+        expect(
+            getPlaybackMediaExtensionFromUrl(
+                'http://localhost:4333/api/stream-proxy?url=https%3A%2F%2Fcdn.example%2Fmovie.mp4'
+            )
+        ).toBe('mp4');
+        expect(
+            getPlaybackMediaExtensionFromUrl(
+                '/api/stream-proxy?url=http%3A%2F%2Fcdn.example%2Flive.ts'
+            )
+        ).toBe('ts');
+        expect(
+            getPlaybackMediaExtensionFromUrl(
+                '/api/stream-proxy?url=http%3A%2F%2Fcdn.example%2Flive%2Fuser%2Fpass%2F123'
+            )
+        ).toBe('');
+    });
+
     it('detects codecs with limited Chromium browser-player support', () => {
         expect(
             getLikelyBrowserUnsupportedCodecLabels({

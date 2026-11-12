@@ -61,6 +61,11 @@ const NON_MEDIA_URL_EXTENSIONS = new Set([
 ]);
 
 export function getPlaybackMediaExtensionFromUrl(url: string): string {
+    const nestedTargetUrl = getNestedTargetUrl(url);
+    if (nestedTargetUrl) {
+        return getPlaybackMediaExtensionFromUrl(nestedTargetUrl);
+    }
+
     const explicitQueryExtension = getMediaExtensionFromQuery(
         url,
         EXPLICIT_MEDIA_EXTENSION_QUERY_KEYS
@@ -124,4 +129,24 @@ function normalizeDeclaredMediaExtension(value: string | undefined): string {
     }
 
     return DECLARED_MEDIA_EXTENSIONS.has(normalized) ? normalized : '';
+}
+
+function getNestedTargetUrl(url: string): string | null {
+    if (!url || !url.includes('url=')) {
+        return null;
+    }
+    try {
+        const parsedUrl = new URL(url, 'http://iptvnator.local');
+        const target = parsedUrl.searchParams.get('url');
+        if (
+            target &&
+            target !== url &&
+            (target.startsWith('http://') || target.startsWith('https://'))
+        ) {
+            return target;
+        }
+    } catch {
+        return null;
+    }
+    return null;
 }

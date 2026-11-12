@@ -9,10 +9,16 @@ envsubst '${PORT}' < /etc/nginx/http.d/default.conf.template > /etc/nginx/http.d
 node <<'NODE'
 const fs = require('node:fs');
 
+const streamProxy = process.env.IPTVNATOR_STREAM_PROXY;
+const streamProxyEnabled = streamProxy === undefined ? true : (streamProxy === '1' || streamProxy === 'true');
+
 fs.writeFileSync(
     '/usr/share/nginx/html/assets/app-config.js',
     `window.__IPTVNATOR_CONFIG__ = ${JSON.stringify(
-        { BACKEND_URL: process.env.BACKEND_URL || '/api' },
+        {
+            BACKEND_URL: process.env.BACKEND_URL || '/api',
+            STREAM_PROXY_ENABLED: streamProxyEnabled,
+        },
         null,
         2
     )};\n`

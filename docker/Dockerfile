@@ -57,6 +57,7 @@ ENV BACKEND_URL=/api
 ENV CLIENT_URL=http://localhost:4333
 ENV IPTVNATOR_STORAGE=server
 ENV IPTVNATOR_DATA_DIR=/data
+ENV IPTVNATOR_STREAM_PROXY=1
 
 COPY --from=build /usr/src/app/dist/apps/web /usr/share/nginx/html
 COPY --from=build /usr/src/app/dist/apps/web-backend ./web-backend

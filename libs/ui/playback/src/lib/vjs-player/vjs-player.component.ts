@@ -148,7 +148,10 @@ export class VjsPlayerComponent implements OnInit, OnChanges, OnDestroy {
 
         const vjsOptions = createVjsPlayerOptions(
             this.options(),
-            this.mpegTsSession.isSupportedSource(this.desiredSource?.src),
+            this.mpegTsSession.isSupportedSource(
+                this.desiredSource?.src,
+                this.desiredSource?.type
+            ),
             this.sharedControls
         );
         this.player = videoJs(
@@ -318,7 +321,10 @@ export class VjsPlayerComponent implements OnInit, OnChanges, OnDestroy {
         this.desiredSource = source;
         this.resetCoordinator.clearSourceApplied();
 
-        if (!source || this.mpegTsSession.isSupportedSource(source.src)) {
+        if (
+            !source ||
+            this.mpegTsSession.isSupportedSource(source.src, source.type)
+        ) {
             this.resetCoordinator.requestReset();
             return;
         }
@@ -350,7 +356,7 @@ export class VjsPlayerComponent implements OnInit, OnChanges, OnDestroy {
             this.resetCoordinator.markSourceApplied();
             return;
         }
-        if (this.mpegTsSession.isSupportedSource(source.src)) {
+        if (this.mpegTsSession.isSupportedSource(source.src, source.type)) {
             this.activateSource(source, video);
             return;
         }
@@ -372,7 +378,7 @@ export class VjsPlayerComponent implements OnInit, OnChanges, OnDestroy {
         }
         this.controlsBridge?.setSource();
         this.legacyTracks?.bind();
-        if (this.mpegTsSession.isSupportedSource(source.src)) {
+        if (this.mpegTsSession.isSupportedSource(source.src, source.type)) {
             debugVjsPlayer('Using mpegts.js for TS stream:', source.src);
             this.mpegTsSession.start(source.src, video);
         }

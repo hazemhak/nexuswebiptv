@@ -34,8 +34,11 @@ export class VjsMpegTsSession {
 
     constructor(private readonly config: VjsMpegTsSessionConfig) {}
 
-    isSupportedSource(url?: string): boolean {
+    isSupportedSource(url?: string, type?: string): boolean {
         if (!url) {
+            return false;
+        }
+        if (type && type !== 'video/mp2t') {
             return false;
         }
 

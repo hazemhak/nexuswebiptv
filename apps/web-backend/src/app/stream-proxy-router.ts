@@ -135,8 +135,27 @@ async function proxyStream(options: ProxyStreamOptions): Promise<void> {
     const { rawUrl, userAgent, forwardedRequestHeaders, policy, res, hopCount } =
         options;
 
+    // Handle embedded HTTP basic auth if present (e.g. http://user:pass@domain/...)
+    let sanitizedRawUrl = rawUrl;
+    let basicAuthHeader: string | undefined;
+    try {
+        const parsed = new URL(rawUrl);
+        if (parsed.username || parsed.password) {
+            basicAuthHeader =
+                'Basic ' +
+                Buffer.from(
+                    `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`
+                ).toString('base64');
+            parsed.username = '';
+            parsed.password = '';
+            sanitizedRawUrl = parsed.href;
+        }
+    } catch {
+        // let validateProviderUrl report the invalid URL
+    }
+
     // SSRF guard: validate every hop
-    const target = await validateProviderUrl(rawUrl, policy);
+    const target = await validateProviderUrl(sanitizedRawUrl, policy);
     if ('message' in target) {
         res.status(target.status).json({ message: target.message, status: target.status });
         return;
@@ -148,15 +167,15 @@ async function proxyStream(options: ProxyStreamOptions): Promise<void> {
     const port = Number(url.port || (secure ? 443 : 80));
     const path = url.pathname + url.search;
 
-    // Pin to validated IP address (matches ValidatedHttpClient behaviour)
-    const pinnedAddress = target.addresses[0];
-
     const reqHeaders: Record<string, string> = {
         ...forwardedRequestHeaders,
         Host: url.host,
     };
     if (userAgent) {
         reqHeaders['User-Agent'] = userAgent;
+    }
+    if (basicAuthHeader && !reqHeaders['Authorization'] && !reqHeaders['authorization']) {
+        reqHeaders['Authorization'] = basicAuthHeader;
     }
 
     const upstream = await new Promise<IncomingMessage>((resolve, reject) => {
@@ -223,11 +242,16 @@ async function proxyStream(options: ProxyStreamOptions): Promise<void> {
     // For HLS manifests: rewrite segment URLs in the .m3u8 so the browser
     // requests those through the proxy too.
     const contentType = (upstream.headers['content-type'] ?? '').toLowerCase();
-    if (
+    const isM3u =
         contentType.includes('mpegurl') ||
         contentType.includes('x-mpegurl') ||
-        contentType.includes('application/vnd.apple.mpegurl')
-    ) {
+        contentType.includes('application/vnd.apple.mpegurl') ||
+        url.pathname.toLowerCase().endsWith('.m3u8') ||
+        url.pathname.toLowerCase().endsWith('.m3u') ||
+        url.search.toLowerCase().includes('.m3u8') ||
+        url.search.toLowerCase().includes('.m3u');
+
+    if (isM3u) {
         await rewriteAndSendM3u8(upstream, url.href, options.req, res);
         return;
     }
@@ -247,6 +271,7 @@ async function proxyStream(options: ProxyStreamOptions): Promise<void> {
  * This is what makes seeking and multi-bitrate HLS work:
  *   - Every `.ts` segment line becomes `/api/stream-proxy?url=<encoded-ts-url>`
  *   - Every sub-playlist line becomes `/api/stream-proxy?url=<encoded-m3u8-url>`
+ *   - Every URI attribute in tags (#EXT-X-KEY, #EXT-X-MEDIA, #EXT-X-MAP) is proxied
  *   - Absolute URIs (http/https) are encoded as-is; relative URIs are resolved
  *     against the manifest's own URL first.
  */
@@ -267,9 +292,22 @@ async function rewriteAndSendM3u8(
         .split('\n')
         .map((line) => {
             const trimmed = line.trim();
-            // Skip tags and empty lines
-            if (!trimmed || trimmed.startsWith('#')) return line;
-            // Resolve the URL (handle relative paths)
+            if (!trimmed) return line;
+
+            // Rewrite URI attributes in HLS tags (#EXT-X-KEY, #EXT-X-MEDIA, #EXT-X-MAP, etc.)
+            if (trimmed.startsWith('#')) {
+                return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
+                    let resolved: string;
+                    try {
+                        resolved = new URL(uri, baseUrl).href;
+                    } catch {
+                        return _match;
+                    }
+                    return `URI="${proxyBase}/stream-proxy?url=${encodeURIComponent(resolved)}"`;
+                });
+            }
+
+            // Resolve media segment or sub-playlist URL
             let resolved: string;
             try {
                 resolved = new URL(trimmed, baseUrl).href;
@@ -286,12 +324,8 @@ async function rewriteAndSendM3u8(
 }
 
 function buildProxyBase(req: Request): string {
-    // In production (nginx), the backend lives at /api; in dev it listens directly.
-    // We piggyback on the request's protocol and host to build an absolute URL
-    // so the browser can reach our proxy endpoint from the video element.
-    const proto = req.headers['x-forwarded-proto'] ?? req.protocol ?? 'http';
-    const host = req.headers['x-forwarded-host'] ?? req.headers['host'] ?? 'localhost';
-    // Strip the leading /api prefix added by the hosted web app / nginx.
-    // The browser-facing URL is <origin>/api/stream-proxy.
-    return `${proto}://${host}/api`;
+    // Return root-relative '/api' path so segment requests are resolved against
+    // the client's current browser origin, host, and port directly without
+    // depending on reverse-proxy header rewrites.
+    return '/api';
 }
