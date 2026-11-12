@@ -7,7 +7,7 @@
 
 ---
 
-## ✨ Features
+## Features
 
 - 🌐 **Web PWA Player**: Run anywhere in your browser (desktop, tablet, mobile).
 - 🛡️ **Server-Side Stream Proxy**:
@@ -36,13 +36,26 @@
 ### 1. Prerequisites
 - Docker & Docker Compose installed on your host / VPS.
 
-### 2. Run with Docker Compose
+### 2. Option A: Run directly from Docker Hub (Fastest)
+```bash
+docker run -d \
+  --name nexuswebiptv \
+  -p 4333:80 \
+  -e IPTVNATOR_STREAM_PROXY=1 \
+  -e IPTVNATOR_ACCESS_TOKEN=HHak1680 \
+  -e CLIENT_URL=http://usa.almualla.one:4333 \
+  -v nexuswebiptv-data:/data \
+  --restart unless-stopped \
+  hazemhak/nexuswebiptv:latest
+```
+
+### 3. Option B: Run with Docker Compose
 Clone the repository and start the container:
 
 ```bash
 git clone https://github.com/hazemhak/nexuswebiptv.git
 cd nexuswebiptv/docker
-docker compose up -d --build
+docker compose up -d
 ```
 
 Access the app in your browser at:
@@ -54,11 +67,8 @@ Access the app in your browser at:
 
 ```yaml
 services:
-  iptvnator:
-    image: nexuswebiptv:latest
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+  nexuswebiptv:
+    image: hazemhak/nexuswebiptv:latest
     restart: unless-stopped
     ports:
       - "4333:80"
@@ -68,7 +78,7 @@ services:
       PORT: "3000"
       IPTVNATOR_STORAGE: server
       IPTVNATOR_STREAM_PROXY: "1"              # 1 = All video streams route through VPS
-      IPTVNATOR_ACCESS_TOKEN: admin123         # Web login password (leave empty to disable)
+      IPTVNATOR_ACCESS_TOKEN: HHak1680         # Web login password (leave empty to disable)
       IPTVNATOR_PROXY_ALLOW_PRIVATE_NETWORKS: "0" # Set to "1" if your IPTV server is on a LAN IP
     volumes:
       - iptvnator-data:/data
@@ -125,6 +135,14 @@ pnpm run serve:backend
 # Terminal 2: Angular Frontend PWA
 pnpm run serve:frontend
 ```
+
+---
+
+## 🤖 Maintenance & AI Agent Guide
+
+For detailed instructions on building multi-arch Docker images, memory limits, and publishing to Docker Hub, see:
+- 📖 [Docker Build & Docker Hub Publishing Guide](docs/maintenance/docker-hub-agent-guide.md)
+- 📖 [Docker Hub Summary](DOCKERHUB.md)
 
 ---
 

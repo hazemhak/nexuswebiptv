@@ -1,7 +1,7 @@
 ---
 services:
-  iptvnator:
-    image: 4gray/iptvnator:latest
+  nexuswebiptv:
+    image: hazemhak/nexuswebiptv:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile
