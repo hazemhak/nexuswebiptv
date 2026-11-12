@@ -24,7 +24,7 @@ import {
     type PlaybackRecommendationTarget,
 } from '@iptvnator/playback/util';
 import { PORTAL_EXTERNAL_PLAYBACK } from '@iptvnator/portal/shared/util';
-import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
+import { RuntimeCapabilitiesService, SettingsStore, StreamProxyService } from '@iptvnator/services';
 import { PlaybackHistoryGate } from '@iptvnator/playback/data-access';
 import {
     VideoPlayer,
@@ -119,6 +119,7 @@ export class WebPlayerViewComponent implements OnDestroy {
     );
     private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly streamProxy = inject(StreamProxyService);
     private readonly externalPlayback = inject(PORTAL_EXTERNAL_PLAYBACK, {
         optional: true,
     });
@@ -358,8 +359,23 @@ export class WebPlayerViewComponent implements OnDestroy {
                 token,
                 () => this.playbackApplicationToken(),
                 (handoff) => {
-                    this.channel.set(handoff.channel);
-                    this.vjsOptions.set(handoff.vjsOptions);
+                    const proxiedStreamUrl = this.streamProxy.rewrite(
+                        playback.streamUrl,
+                        handoff.channel.http?.['user-agent']
+                    );
+                    const channel = {
+                        ...handoff.channel,
+                        url: proxiedStreamUrl,
+                    };
+                    const vjsOptions = {
+                        ...handoff.vjsOptions,
+                        sources: (handoff.vjsOptions.sources ?? []).map((src) => ({
+                            ...src,
+                            src: this.streamProxy.rewrite(src.src, handoff.channel.http?.['user-agent']),
+                        })),
+                    };
+                    this.channel.set(channel);
+                    this.vjsOptions.set(vjsOptions);
                 }
             );
         });

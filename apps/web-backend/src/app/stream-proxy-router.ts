@@ -161,7 +161,7 @@ async function proxyStream(options: ProxyStreamOptions): Promise<void> {
 
     const upstream = await new Promise<IncomingMessage>((resolve, reject) => {
         const requestOptions: RequestOptions = {
-            hostname: isIP(pinnedAddress) ? pinnedAddress : hostname,
+            hostname,
             port,
             path,
             method: 'GET',
