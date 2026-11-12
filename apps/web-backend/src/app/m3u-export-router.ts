@@ -20,6 +20,9 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import * as readline from 'node:readline';
 import type { ServerStorage } from './storage/server-storage';
 import { legacySourceDocument } from './storage/legacy-source-document';
 
@@ -43,7 +46,7 @@ export function createM3uExportRouter(
         res.status(401).send('#EXTM3U\n# Unauthorized: Invalid or missing access token\n');
     };
 
-    router.get('/m3u/:id', checkAuth, (req, res) => {
+    router.get('/m3u/:id', checkAuth, async (req, res) => {
         if (!storage) {
             res.status(503).send('#EXTM3U\n# Error: Server storage is disabled\n');
             return;
@@ -58,15 +61,15 @@ export function createM3uExportRouter(
         }
 
         const legacy = legacySourceDocument(doc) as Record<string, unknown>;
-        const m3uContent = buildM3uPlaylist([legacy], req, accessToken);
         const title = typeof legacy['title'] === 'string' ? legacy['title'] : 'playlist';
 
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
         res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(title)}.m3u"`);
-        res.send(m3uContent);
+
+        await streamM3uPlaylists([legacy], req, res, accessToken);
     });
 
-    router.get('/m3u', checkAuth, (req, res) => {
+    router.get('/m3u', checkAuth, async (req, res) => {
         if (!storage) {
             res.status(503).send('#EXTM3U\n# Error: Server storage is disabled\n');
             return;
@@ -75,25 +78,37 @@ export function createM3uExportRouter(
         const allPlaylists = storage.playlists
             .listAll()
             .map((doc) => legacySourceDocument(doc) as Record<string, unknown>);
-        const m3uContent = buildM3uPlaylist(allPlaylists, req, accessToken);
 
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
         res.setHeader('Content-Disposition', 'inline; filename="iptvnator-all.m3u"');
-        res.send(m3uContent);
+
+        await streamM3uPlaylists(allPlaylists, req, res, accessToken);
     });
 
     return router;
 }
 
-function buildM3uPlaylist(
+async function streamM3uPlaylists(
     playlists: Array<Record<string, unknown>>,
     req: Request,
+    res: Response,
     serverToken: string | null
-): string {
+): Promise<void> {
     const proxyBase = getProxyBaseUrl(req);
-    const lines: string[] = ['#EXTM3U'];
+    res.write('#EXTM3U\n');
 
     for (const p of playlists) {
+        // Xtream Codes portal source
+        if (p['serverUrl'] && p['username'] && p['password']) {
+            const serverUrl = String(p['serverUrl']).replace(/\/+$/, '');
+            const username = String(p['username']);
+            const password = String(p['password']);
+            const xtreamUrl = `${serverUrl}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=m3u8`;
+            await streamXtreamM3u(xtreamUrl, proxyBase, serverToken, res);
+            continue;
+        }
+
+        // Standard M3U playlist with parsed items
         const playlistObj = p['playlist'] as Record<string, unknown> | undefined;
         const items = (playlistObj?.['items'] || p['items'] || []) as Array<Record<string, unknown>>;
         const playlistTitle = (p['title'] as string) || 'IPTV';
@@ -110,27 +125,92 @@ function buildM3uPlaylist(
             const tvgName = tvg['name'] || name;
             const tvgLogo = tvg['logo'] || '';
 
-            // Format #EXTINF line with standard IPTV metadata attributes
             const extinfParts = ['#EXTINF:-1'];
             if (tvgId) extinfParts.push(`tvg-id="${escapeAttr(tvgId)}"`);
             if (tvgName) extinfParts.push(`tvg-name="${escapeAttr(tvgName)}"`);
             if (tvgLogo) extinfParts.push(`tvg-logo="${escapeAttr(tvgLogo)}"`);
             if (groupTitle) extinfParts.push(`group-title="${escapeAttr(groupTitle)}"`);
 
-            lines.push(`${extinfParts.join(' ')},${name}`);
-
-            // Proxy the stream URL through our server
             let proxiedUrl = `${proxyBase}/stream-proxy?url=${encodeURIComponent(rawUrl)}`;
-            // If the server requires a token, append it to the proxied stream if necessary
             if (serverToken) {
                 proxiedUrl += `&token=${encodeURIComponent(serverToken)}`;
             }
 
-            lines.push(proxiedUrl);
+            res.write(`${extinfParts.join(' ')},${name}\n${proxiedUrl}\n`);
         }
     }
 
-    return lines.join('\n') + '\n';
+    res.end();
+}
+
+function streamXtreamM3u(
+    targetUrl: string,
+    proxyBase: string,
+    serverToken: string | null,
+    res: Response,
+    hopCount = 0
+): Promise<void> {
+    if (hopCount > 5) return Promise.resolve();
+
+    return new Promise((resolve) => {
+        let parsed: URL;
+        try {
+            parsed = new URL(targetUrl);
+        } catch {
+            return resolve();
+        }
+
+        const makeRequest = parsed.protocol === 'https:' ? httpsRequest : httpRequest;
+        const req = makeRequest(
+            targetUrl,
+            {
+                headers: {
+                    'User-Agent': 'IPTVSmarters/2.2.2.1',
+                    Accept: '*/*',
+                },
+                timeout: 30000,
+            },
+            (upstream) => {
+                const status = upstream.statusCode ?? 200;
+                if (status >= 300 && status < 400 && upstream.headers.location) {
+                    upstream.resume();
+                    const redirectUrl = new URL(upstream.headers.location, targetUrl).href;
+                    return resolve(streamXtreamM3u(redirectUrl, proxyBase, serverToken, res, hopCount + 1));
+                }
+
+                if (status !== 200) {
+                    upstream.resume();
+                    return resolve();
+                }
+
+                const rl = readline.createInterface({ input: upstream, crlfDelay: Infinity });
+                rl.on('line', (line) => {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed === '#EXTM3U') return;
+
+                    if (trimmed.startsWith('#')) {
+                        res.write(trimmed + '\n');
+                    } else if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+                        let proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(trimmed)}`;
+                        if (serverToken) {
+                            proxied += `&token=${encodeURIComponent(serverToken)}`;
+                        }
+                        res.write(proxied + '\n');
+                    }
+                });
+
+                rl.on('close', resolve);
+                upstream.on('error', resolve);
+            }
+        );
+
+        req.on('error', resolve);
+        req.on('timeout', () => {
+            req.destroy();
+            resolve();
+        });
+        req.end();
+    });
 }
 
 function getProxyBaseUrl(req: Request): string {
