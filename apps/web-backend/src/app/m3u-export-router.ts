@@ -7,16 +7,11 @@
  * VPS server stream proxy.
  *
  * Endpoints:
- *   1. GET /m3u/:id
- *      Exports a specific playlist by ID as a standard Extended M3U (#EXTM3U).
- *      Query params:
- *        - token=<string>  (optional/required if IPTVNATOR_ACCESS_TOKEN or UI password is set)
- *
- *   2. GET /m3u
- *      Exports all stored playlists merged into a single M3U playlist.
- *
- * Each channel item has its stream URL rewritten to:
- *   http://<host>/api/stream-proxy?url=<encoded_stream_url>
+ *   - /api/m3u/playlist.m3u (all playlists)
+ *   - /api/m3u/token/:token/playlist.m3u (all playlists with auth token)
+ *   - /api/m3u/:id/playlist.m3u (single playlist)
+ *   - /api/m3u/token/:token/:id/playlist.m3u (single playlist with auth token)
+ *   - /api/m3u.m3u?token=... (legacy query format)
  */
 
 import { Router, Request, Response } from 'express';
@@ -38,7 +33,6 @@ export function createM3uExportRouter(
 ): Router {
     const router = Router();
 
-    // Middleware to validate token if set via query param or Authorization header
     const checkAuth = (req: Request, res: Response, next: () => void) => {
         if (!accessToken && !uiPassword) {
             return next();
@@ -64,23 +58,30 @@ export function createM3uExportRouter(
         }
 
         const effectiveToken = extractRequestToken(req) || accessToken || uiPassword || null;
+        let targetId = req.params['id'] || '';
 
-        const rawId = req.params['id'] || req.params[0];
-        if (rawId) {
-            const playlistId = (Array.isArray(rawId) ? rawId[0] : rawId).replace(/\.m3u8?$/i, '');
-            const doc = storage.playlists.get(playlistId);
-            if (!doc) {
-                res.status(404).send('#EXTM3U\n# Error: Playlist not found\n');
+        if (req.path.includes('/token/')) {
+            const parts = req.path.split('/token/')[1]?.split('/') || [];
+            if (parts.length >= 3 && parts[1] !== 'playlist.m3u' && parts[1] !== 'type' && parts[1] !== 'direct') {
+                targetId = decodeURIComponent(parts[1]).replace(/\.m3u8?$/i, '');
+            }
+        }
+
+        if (targetId) {
+            const playlistId = targetId.replace(/\.m3u8?$/i, '');
+            if (playlistId !== 'all' && playlistId !== 'playlist') {
+                const doc = storage.playlists.get(playlistId);
+                if (!doc) {
+                    res.status(404).send('#EXTM3U\n# Error: Playlist not found\n');
+                    return;
+                }
+
+                const legacy = legacySourceDocument(doc) as Record<string, unknown>;
+                res.setHeader('Content-Type', 'application/x-mpegurl; charset=utf-8');
+                res.setHeader('Content-Disposition', 'attachment; filename="playlist.m3u"');
+                await streamM3uPlaylists([legacy], req, res, effectiveToken);
                 return;
             }
-
-            const legacy = legacySourceDocument(doc) as Record<string, unknown>;
-
-            res.setHeader('Content-Type', 'application/x-mpegurl; charset=utf-8');
-            res.setHeader('Content-Disposition', 'attachment; filename="playlist.m3u"');
-
-            await streamM3uPlaylists([legacy], req, res, effectiveToken);
-            return;
         }
 
         const allPlaylists = storage.playlists
@@ -94,19 +95,40 @@ export function createM3uExportRouter(
     };
 
     const routes = [
-        '/m3u/:id',
-        '/m3u/:id.m3u',
         '/m3u',
         '/m3u.m3u',
         '/playlist.m3u',
+        '/m3u/playlist.m3u',
+        '/m3u/:id',
+        '/m3u/:id.m3u',
+        '/m3u/:id/playlist.m3u',
+        '/m3u/token/:token/playlist.m3u',
+        '/m3u/token/:token/direct/playlist.m3u',
+        '/m3u/token/:token/type/:type/playlist.m3u',
+        '/m3u/token/:token/type/:type/direct/playlist.m3u',
+        '/m3u/token/:token/:id/playlist.m3u',
+        '/m3u/token/:token/:id.m3u',
+        '/m3u/token/:token/:id/type/:type/playlist.m3u',
+        '/m3u/token/:token/:id/direct/playlist.m3u',
+        '/m3u/token/:token/:id/type/:type/direct/playlist.m3u',
+        '/m3u/type/:type/playlist.m3u',
+        '/m3u/direct/playlist.m3u',
+        '/m3u/type/:type/direct/playlist.m3u',
         /^\/(?:api\/)?m3u(?:\.m3u)?$/,
-        /^\/(?:api\/)?m3u\/(.+?)(?:\.m3u8?)?$/,
         /^\/(?:api\/)?playlist\.m3u$/,
+        /^\/(?:api\/)?m3u\/playlist\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/playlist\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/(.+?)\/playlist\.m3u$/,
+        /^\/(?:api\/)?m3u\/(.+?)(?:\.m3u8?)?$/,
     ];
 
     for (const r of routes) {
         router.get(r, checkAuth, exportHandler);
         router.head(r, checkAuth, exportHandler);
+        if (typeof r === 'string') {
+            router.get(`/api${r}`, checkAuth, exportHandler);
+            router.head(`/api${r}`, checkAuth, exportHandler);
+        }
     }
 
     return router;
@@ -119,13 +141,18 @@ async function streamM3uPlaylists(
     serverToken: string | null
 ): Promise<void> {
     const proxyBase = getProxyBaseUrl(req);
+    const isDirect = req.path.includes('/direct');
     const proxyQuery = typeof req.query['proxy'] === 'string' ? req.query['proxy'].trim().toLowerCase() : '';
-    const useProxy = proxyQuery !== '0' && proxyQuery !== 'false' && proxyQuery !== 'no';
+    const useProxy = !isDirect && proxyQuery !== '0' && proxyQuery !== 'false' && proxyQuery !== 'no';
     const outputFormat =
         typeof req.query['output'] === 'string' && req.query['output'].trim()
             ? req.query['output'].trim()
             : '';
+    const typeFromParam =
+        (typeof req.params['type'] === 'string' ? req.params['type'] : '') ||
+        (req.path.match(/\/type\/([^/]+)/)?.[1] ?? '');
     const rawType =
+        typeFromParam ||
         (typeof req.query['stream_type'] === 'string' ? req.query['stream_type'] : '') ||
         (typeof req.query['type'] === 'string' && req.query['type'] !== 'm3u' && req.query['type'] !== 'm3u_plus'
             ? req.query['type']
@@ -148,7 +175,6 @@ async function streamM3uPlaylists(
             const serverUrl = String(p['serverUrl']).replace(/\/+$/, '');
             const username = String(p['username']);
             const password = String(p['password']);
-
             await streamXtreamM3u(
                 serverUrl,
                 username,
@@ -222,6 +248,14 @@ function getProxyBaseUrl(req: Request): string {
 }
 
 function extractRequestToken(req: Request): string {
+    if (typeof req.params['token'] === 'string' && req.params['token'].trim()) {
+        return req.params['token'].trim();
+    }
+    const tokenMatch = req.path.match(/\/token\/([^/]+)/);
+    if (tokenMatch) {
+        return decodeURIComponent(tokenMatch[1]).trim();
+    }
+
     const query = req.query;
     const fromQuery =
         (typeof query['token'] === 'string' ? query['token'] : '') ||
@@ -229,26 +263,14 @@ function extractRequestToken(req: Request): string {
         (typeof query['auth'] === 'string' ? query['auth'] : '') ||
         (typeof query['key'] === 'string' ? query['key'] : '') ||
         (typeof query['password'] === 'string' ? query['password'] : '') ||
-        (typeof query['pass'] === 'string' ? query['pass'] : '');
+        (typeof query['pass'] === 'string' ? query['pass'] : '') ||
+        (typeof query['secret'] === 'string' ? query['secret'] : '');
 
-    if (fromQuery.trim()) {
-        return fromQuery.trim();
-    }
+    if (fromQuery) return fromQuery.trim();
 
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-        if (authHeader.startsWith('Bearer ')) {
-            return authHeader.slice(7).trim();
-        }
-        if (authHeader.startsWith('Basic ')) {
-            try {
-                const decoded = Buffer.from(authHeader.slice(6).trim(), 'base64').toString('utf8');
-                const parts = decoded.split(':');
-                return parts[1]?.trim() || parts[0]?.trim() || '';
-            } catch {
-                // Ignore decoding failure
-            }
-        }
+    const authHeader = req.headers['authorization'];
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+        return authHeader.slice(7).trim();
     }
 
     return '';

@@ -152,6 +152,7 @@ export function fetchXtreamJson<T>(targetUrl: string, hopCount = 0): Promise<T |
                     Accept: 'application/json, */*',
                 },
                 timeout: 15000,
+                rejectUnauthorized: false,
             },
             (res) => {
                 const status = res.statusCode ?? 0;

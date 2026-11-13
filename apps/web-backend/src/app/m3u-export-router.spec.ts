@@ -167,4 +167,44 @@ describe('m3u export router', () => {
             });
         });
     });
+
+    it('supports path-based token and playlist.m3u ending for IPTV Smarters', async () => {
+        await withTempStorage(async (storage) => {
+            const doc = {
+                ...m3uDocument('p3', 'Token Playlist'),
+                playlist: {
+                    header: { raw: '#EXTM3U' },
+                    items: [
+                        { name: 'Channel A', url: 'http://stream.example/live/a.ts' },
+                        { name: 'Series B S01E01', url: 'http://stream.example/series/b.mp4' },
+                    ],
+                },
+            };
+            storage.playlists.upsert(doc, { keepPayload: false });
+
+            const app = express();
+            app.use(createM3uExportRouter(storage, 'my-secret'));
+            await withServer(app, async (baseUrl) => {
+                // Path-based token ending strictly in playlist.m3u
+                const res = await fetch(`${baseUrl}/m3u/token/my-secret/playlist.m3u`);
+                expect(res.status).toBe(200);
+                const text = await res.text();
+                expect(text).toContain('Channel A');
+                expect(text).toContain('Series B S01E01');
+
+                // Path-based type filter
+                const resType = await fetch(`${baseUrl}/m3u/token/my-secret/type/series/playlist.m3u`);
+                expect(resType.status).toBe(200);
+                const textType = await resType.text();
+                expect(textType).toContain('Series B S01E01');
+                expect(textType).not.toContain('Channel A');
+
+                // Path-based direct mode
+                const resDirect = await fetch(`${baseUrl}/m3u/token/my-secret/direct/playlist.m3u`);
+                expect(resDirect.status).toBe(200);
+                const textDirect = await resDirect.text();
+                expect(textDirect).not.toContain('/stream-proxy');
+            });
+        });
+    });
 });

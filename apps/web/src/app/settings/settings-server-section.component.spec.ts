@@ -1,7 +1,9 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import type { Playlist } from '@iptvnator/shared/interfaces';
+import { PlaylistsService } from '@iptvnator/services';
 import {
     SourceSyncService,
     disconnectBrowserSourceConnection,
@@ -57,7 +59,15 @@ describe('source server settings', () => {
                 SettingsServerSectionComponent,
                 TranslateModule.forRoot(),
             ],
-            providers: [{ provide: SourceSyncService, useValue: sync }],
+            providers: [
+                { provide: SourceSyncService, useValue: sync },
+                {
+                    provide: PlaylistsService,
+                    useValue: {
+                        getAllPlaylists: jest.fn().mockReturnValue(of([])),
+                    },
+                },
+            ],
         }).compileComponents();
         fixture = TestBed.createComponent(SettingsServerSectionComponent);
         fixture.detectChanges();

@@ -284,6 +284,7 @@ function streamM3uFromUrl(
                     Accept: '*/*',
                 },
                 timeout: 30000,
+                rejectUnauthorized: false,
             },
             (upstream) => {
                 const status = upstream.statusCode ?? 200;
