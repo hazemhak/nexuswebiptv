@@ -23,7 +23,7 @@ export async function streamXtreamM3u(
         return;
     }
     if (streamType === 'series') {
-        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
+        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy, streamType);
         return;
     }
     if (streamType === 'live') {
@@ -48,7 +48,7 @@ export async function streamXtreamM3u(
     }
 
     if (seriesCount === 0 && !res.writableEnded) {
-        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
+        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy, streamType);
     }
 }
 
@@ -107,9 +107,9 @@ async function streamMovies(
         const rawCat = (item.category_id && catMap.get(String(item.category_id))) || 'Movies';
         const catName = formatMovieCategory(rawCat);
         const movieStreamUrl = `${cleanServer}/movie/${userEnc}/${passEnc}/${item.stream_id}.${ext}`;
-        const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
+        const proxied = `${proxyBase}/stream-proxy/movie/${item.stream_id}.${ext}?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
         const finalUrl = useProxy ? proxied : movieStreamUrl;
-        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="movies" type="movies",${name}`;
+        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}",${name}`;
         res.write(`${extinf}\n${finalUrl}\n`);
     }
 }
@@ -121,7 +121,8 @@ async function streamSeries(
     proxyBase: string,
     serverToken: string | null,
     res: Response,
-    useProxy = true
+    useProxy = true,
+    streamType = ''
 ): Promise<void> {
     const catUrl = `${cleanServer}/player_api.php?username=${userEnc}&password=${passEnc}&action=get_series_categories`;
     const categories = await fetchXtreamJson<Array<{ category_id?: string | number; category_name?: string }>>(catUrl);
@@ -145,13 +146,15 @@ async function streamSeries(
     if (!Array.isArray(seriesList) || seriesList.length === 0) return;
     const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
 
+    const maxSeries = streamType === 'series' ? 300 : 50;
+    const seriesToFetch = seriesList.slice(0, maxSeries);
     const CONCURRENCY = 8;
     let nextIdx = 0;
 
     const worker = async () => {
-        while (nextIdx < seriesList.length) {
+        while (nextIdx < seriesToFetch.length) {
             if (res.writableEnded || res.destroyed) break;
-            const series = seriesList[nextIdx++];
+            const series = seriesToFetch[nextIdx++];
             if (!series?.series_id) continue;
 
             const infoUrl = `${cleanServer}/player_api.php?username=${userEnc}&password=${passEnc}&action=get_series_info&series_id=${series.series_id}`;
@@ -183,16 +186,16 @@ async function streamSeries(
                         ? `${seriesName} S${s}E${e} - ${ep.title}`
                         : `${seriesName} S${s}E${e}`;
                     const epUrl = `${cleanServer}/series/${userEnc}/${passEnc}/${ep.id}.${ext}`;
-                    const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(epUrl)}${tokenParam}`;
+                    const proxied = `${proxyBase}/stream-proxy/series/${ep.id}.${ext}?url=${encodeURIComponent(epUrl)}${tokenParam}`;
                     const finalUrl = useProxy ? proxied : epUrl;
-                    const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="tvshows" type="tvshows" tvg-serie="${escapeAttr(seriesName)}",${epTitle}`;
+                    const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}",${epTitle}`;
                     res.write(`${extinf}\n${finalUrl}\n`);
                 }
             }
         }
     };
 
-    const pool = Array.from({ length: Math.min(CONCURRENCY, seriesList.length) }, () => worker());
+    const pool = Array.from({ length: Math.min(CONCURRENCY, seriesToFetch.length) }, () => worker());
     await Promise.all(pool);
 }
 
@@ -246,37 +249,41 @@ function streamM3uFromUrl(
                 const rl = readline.createInterface({ input: upstream, crlfDelay: Infinity });
                 rl.on('line', (line) => {
                     const trimmed = line.trim();
-                    if (!trimmed || trimmed === '#EXTM3U') return;
+                    if (!trimmed || trimmed.startsWith('#EXTM3U')) return;
 
                     if (trimmed.startsWith('#')) {
-                        if (trimmed.startsWith('#EXTINF:') && !trimmed.includes('tvg-type=')) {
-                            res.write(trimmed.replace(/^#EXTINF:(-?\d+)/, '#EXTINF:$1 tvg-type="live"') + '\n');
-                        } else {
-                            res.write(trimmed + '\n');
-                        }
-                    } else {
-                        streamCount++;
-                        let fullUrl = trimmed;
-                        if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
-                            try {
-                                fullUrl = new URL(trimmed, targetUrl).href;
-                            } catch {
-                                fullUrl = `${cleanServer}/${trimmed.replace(/^\/+/, '')}`;
-                            }
-                        }
-                        const isVod =
-                            fullUrl.includes('/movie/') ||
-                            fullUrl.includes('/vod/') ||
-                            /\.(mp4|mkv|avi)(\?|$)/i.test(fullUrl);
-                        const isSeries = fullUrl.includes('/series/');
-
-                        if (isVod) vodCount++;
-                        else if (isSeries) seriesCount++;
-
-                        const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(fullUrl)}${tokenParam}`;
-                        const finalUrl = useProxy ? proxied : fullUrl;
-                        res.write(finalUrl + '\n');
+                        res.write(trimmed + '\n');
+                        return;
                     }
+
+                    streamCount++;
+                    let fullUrl = trimmed;
+                    if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
+                        try {
+                            fullUrl = new URL(trimmed, targetUrl).href;
+                        } catch {
+                            fullUrl = `${cleanServer}/${trimmed.replace(/^\/+/, '')}`;
+                        }
+                    }
+                    const isVod =
+                        fullUrl.includes('/movie/') ||
+                        fullUrl.includes('/vod/') ||
+                        /\.(mp4|mkv|avi)(\?|$)/i.test(fullUrl);
+                    const isSeries = fullUrl.includes('/series/');
+
+                    if (isVod) vodCount++;
+                    else if (isSeries) seriesCount++;
+
+                    let finalUrl = fullUrl;
+                    if (useProxy) {
+                        const sub = isVod
+                            ? 'movie/video.mp4'
+                            : isSeries
+                              ? 'series/video.mp4'
+                              : 'live/stream.ts';
+                        finalUrl = `${proxyBase}/stream-proxy/${sub}?url=${encodeURIComponent(fullUrl)}${tokenParam}`;
+                    }
+                    res.write(finalUrl + '\n');
                 });
 
                 rl.on('close', () => resolve({ streamCount, vodCount, seriesCount }));
@@ -350,7 +357,7 @@ function escapeAttr(val: string): string {
     return val.replace(/"/g, "'");
 }
 
-function formatMovieCategory(name: string): string {
+export function formatMovieCategory(name: string): string {
     const trimmed = name.trim();
     if (!trimmed) return 'Movies';
     if (/^(movies?|vod|films?)\b/i.test(trimmed) || /\b(movies?|vod|films?)$/i.test(trimmed)) {
@@ -359,7 +366,7 @@ function formatMovieCategory(name: string): string {
     return `Movies - ${trimmed}`;
 }
 
-function formatSeriesCategory(name: string): string {
+export function formatSeriesCategory(name: string): string {
     const trimmed = name.trim();
     if (!trimmed) return 'Series';
     if (/^(series|tv shows?|shows?|serials?)\b/i.test(trimmed) || /\b(series|tv shows?|shows?|serials?)$/i.test(trimmed)) {

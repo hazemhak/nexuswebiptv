@@ -22,7 +22,11 @@
 import { Router, Request, Response } from 'express';
 import type { ServerStorage } from './storage/server-storage';
 import { legacySourceDocument } from './storage/legacy-source-document';
-import { streamXtreamM3u } from './m3u-export-xtream';
+import {
+    streamXtreamM3u,
+    formatMovieCategory,
+    formatSeriesCategory,
+} from './m3u-export-xtream';
 
 export function createM3uExportRouter(
     storage: ServerStorage | null,
@@ -58,7 +62,7 @@ export function createM3uExportRouter(
 
         const effectiveToken = extractRequestToken(req) || accessToken || uiPassword || null;
 
-        const rawId = req.params['id'];
+        const rawId = req.params['id'] || req.params[0];
         if (rawId) {
             const playlistId = (Array.isArray(rawId) ? rawId[0] : rawId).replace(/\.m3u8?$/i, '');
             const doc = storage.playlists.get(playlistId);
@@ -68,10 +72,9 @@ export function createM3uExportRouter(
             }
 
             const legacy = legacySourceDocument(doc) as Record<string, unknown>;
-            const title = typeof legacy['title'] === 'string' ? legacy['title'] : 'playlist';
 
-            res.setHeader('Content-Type', 'audio/x-mpegurl; charset=utf-8');
-            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(title)}.m3u"`);
+            res.setHeader('Content-Type', 'application/x-mpegurl; charset=utf-8');
+            res.setHeader('Content-Disposition', 'attachment; filename="playlist.m3u"');
 
             await streamM3uPlaylists([legacy], req, res, effectiveToken);
             return;
@@ -81,17 +84,27 @@ export function createM3uExportRouter(
             .listAll()
             .map((doc) => legacySourceDocument(doc) as Record<string, unknown>);
 
-        res.setHeader('Content-Type', 'audio/x-mpegurl; charset=utf-8');
-        res.setHeader('Content-Disposition', 'inline; filename="iptvnator-all.m3u"');
+        res.setHeader('Content-Type', 'application/x-mpegurl; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="playlist.m3u"');
 
         await streamM3uPlaylists(allPlaylists, req, res, effectiveToken);
     };
 
-    router.get('/m3u/:id', checkAuth, exportHandler);
-    router.get('/m3u/:id.m3u', checkAuth, exportHandler);
-    router.get('/m3u', checkAuth, exportHandler);
-    router.get('/m3u.m3u', checkAuth, exportHandler);
-    router.get('/playlist.m3u', checkAuth, exportHandler);
+    const routes = [
+        '/m3u/:id',
+        '/m3u/:id.m3u',
+        '/m3u',
+        '/m3u.m3u',
+        '/playlist.m3u',
+        /^\/(?:api\/)?m3u(?:\.m3u)?$/,
+        /^\/(?:api\/)?m3u\/(.+?)(?:\.m3u8?)?$/,
+        /^\/(?:api\/)?playlist\.m3u$/,
+    ];
+
+    for (const r of routes) {
+        router.get(r, checkAuth, exportHandler);
+        router.head(r, checkAuth, exportHandler);
+    }
 
     return router;
 }
@@ -113,7 +126,16 @@ async function streamM3uPlaylists(
         typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()
             ? req.query['stream_type'].trim()
             : '';
-    res.write('#EXTM3U\n');
+    const playlistWithEpg = playlists.find(
+        (p) => Array.isArray(p['epgUrls']) && p['epgUrls'].length > 0
+    );
+    const rawEpg = playlistWithEpg ? (playlistWithEpg['epgUrls'] as unknown[]) : null;
+    const epgUrl = rawEpg && typeof rawEpg[0] === 'string' ? rawEpg[0] : null;
+    if (epgUrl) {
+        res.write(`#EXTM3U url-tvg="${escapeAttr(epgUrl)}"\n`);
+    } else {
+        res.write('#EXTM3U\n');
+    }
 
     for (const p of playlists) {
         // Xtream Codes portal source
@@ -158,7 +180,10 @@ async function streamM3uPlaylists(
             const name = (item['name'] as string) || 'Channel';
             const tvg = (item['tvg'] as Record<string, string>) || {};
             const group = (item['group'] as Record<string, string>) || {};
-            const groupTitle = group['title'] || playlistTitle;
+            let groupTitle = group['title'] || playlistTitle;
+            if (isMovie) groupTitle = formatMovieCategory(groupTitle);
+            else if (isSeries) groupTitle = formatSeriesCategory(groupTitle);
+
             const tvgId = tvg['id'] || '';
             const tvgName = tvg['name'] || name;
             const tvgLogo = tvg['logo'] || '';
@@ -169,16 +194,14 @@ async function streamM3uPlaylists(
             if (tvgLogo) extinfParts.push(`tvg-logo="${escapeAttr(tvgLogo)}"`);
             if (groupTitle) extinfParts.push(`group-title="${escapeAttr(groupTitle)}"`);
 
-            const typeAttr = isMovie
-                ? 'tvg-type="movies" type="movies"'
-                : isSeries
-                  ? 'tvg-type="tvshows" type="tvshows"'
-                  : 'tvg-type="live"';
-            extinfParts.push(typeAttr);
-
             let streamUrl = rawUrl;
             if (useProxy) {
-                streamUrl = `${proxyBase}/stream-proxy?url=${encodeURIComponent(rawUrl)}`;
+                const sub = isMovie
+                    ? 'movie/video.mp4'
+                    : isSeries
+                      ? 'series/video.mp4'
+                      : 'live/stream.ts';
+                streamUrl = `${proxyBase}/stream-proxy/${sub}?url=${encodeURIComponent(rawUrl)}`;
                 if (serverToken) {
                     streamUrl += `&token=${encodeURIComponent(serverToken)}`;
                 }

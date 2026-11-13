@@ -8,6 +8,7 @@ describe('readServerStorageConfig', () => {
         expect(readServerStorageConfig({})).toEqual({
             enabled: false,
             accessToken: null,
+            uiPassword: null,
             maxDocumentBytes: 64 * 1024 * 1024,
         });
     });

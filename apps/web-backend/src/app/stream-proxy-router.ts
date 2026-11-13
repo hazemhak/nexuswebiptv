@@ -31,14 +31,13 @@
  *  - Only safe response headers are forwarded to the browser.
  */
 
-import { Router, Request, Response, IRouter } from 'express';
+import { Request, Response, IRouter } from 'express';
 import {
     request as httpRequest,
     IncomingMessage,
     RequestOptions,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { isIP } from 'node:net';
 import {
     ProviderUrlPolicy,
     validateProviderUrl,
@@ -71,7 +70,11 @@ export function mountStreamProxy(
     router: IRouter,
     policy: ProviderUrlPolicy
 ): void {
-    router.get('/stream-proxy', (req: Request, res: Response) => {
+    const proxyRoute = /^\/(?:api\/)?stream-proxy(?:\/.*)?$/;
+    router.get(proxyRoute, (req: Request, res: Response) => {
+        void handleStreamProxy(req, res, policy);
+    });
+    router.head(proxyRoute, (req: Request, res: Response) => {
         void handleStreamProxy(req, res, policy);
     });
 }
@@ -346,7 +349,7 @@ function selectDefaultUserAgent(headerVal: unknown): string {
     return 'IPTVSmarters/2.2.2.1';
 }
 
-function buildProxyBase(req: Request): string {
+function buildProxyBase(_req: Request): string {
     // Return root-relative '/api' path so segment requests are resolved against
     // the client's current browser origin, host, and port directly without
     // depending on reverse-proxy header rewrites.

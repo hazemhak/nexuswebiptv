@@ -166,7 +166,7 @@ export function createWebBackendApp(
     // Stream proxy: pipe IPTV streams through the server so all video traffic
     // originates from the host device rather than the user's browser.
     // Endpoint: GET /stream-proxy?url=<encoded-stream-url>
-    app.options('/stream-proxy', corsMiddleware);
+    app.options(/^\/(?:api\/)?stream-proxy(?:\/.*)?$/, corsMiddleware);
     mountStreamProxy(app, providerUrlPolicy);
 
     // M3U export: allows external players (TiviMate, VLC, Kodi) to pull
