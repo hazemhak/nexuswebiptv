@@ -71,7 +71,7 @@ export function mountStreamProxy(
     router: IRouter,
     policy: ProviderUrlPolicy
 ): void {
-    router.get(['/stream-proxy', '/stream-proxy/*'], (req: Request, res: Response) => {
+    router.get('/stream-proxy', (req: Request, res: Response) => {
         void handleStreamProxy(req, res, policy);
     });
 }

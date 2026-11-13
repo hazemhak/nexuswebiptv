@@ -106,7 +106,7 @@ async function streamMovies(
         const logo = item.stream_icon || '';
         const catName = (item.category_id && catMap.get(String(item.category_id))) || 'Movies';
         const movieStreamUrl = `${cleanServer}/movie/${userEnc}/${passEnc}/${item.stream_id}.${ext}`;
-        const proxied = `${proxyBase}/stream-proxy/movie/${item.stream_id}.${ext}?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
+        const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
         const finalUrl = useProxy ? proxied : movieStreamUrl;
         const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="movie",${name}`;
         res.write(`${extinf}\n${finalUrl}\n`);
@@ -181,7 +181,7 @@ async function streamSeries(
                         ? `${seriesName} S${s}E${e} - ${ep.title}`
                         : `${seriesName} S${s}E${e}`;
                     const epUrl = `${cleanServer}/series/${userEnc}/${passEnc}/${ep.id}.${ext}`;
-                    const proxied = `${proxyBase}/stream-proxy/series/${ep.id}.${ext}?url=${encodeURIComponent(epUrl)}${tokenParam}`;
+                    const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(epUrl)}${tokenParam}`;
                     const finalUrl = useProxy ? proxied : epUrl;
                     const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="series",${epTitle}`;
                     res.write(`${extinf}\n${finalUrl}\n`);
@@ -267,8 +267,7 @@ function streamM3uFromUrl(
                         if (isVod) vodCount++;
                         else if (isSeries) seriesCount++;
 
-                        const typePrefix = isVod ? 'movie/' : isSeries ? 'series/' : '';
-                        const proxied = `${proxyBase}/stream-proxy/${typePrefix}?url=${encodeURIComponent(fullUrl)}${tokenParam}`.replace('/stream-proxy//', '/stream-proxy/');
+                        const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(fullUrl)}${tokenParam}`;
                         const finalUrl = useProxy ? proxied : fullUrl;
                         res.write(finalUrl + '\n');
                     }
