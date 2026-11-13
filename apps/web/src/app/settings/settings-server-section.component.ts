@@ -2,6 +2,7 @@ import { SettingsHostedServerComponent } from './settings-hosted-server.componen
 import { RuntimeCapabilitiesService } from '@iptvnator/services';
 import { SettingsHistorySectionComponent } from './settings-history-section.component';
 import { SettingsFavoritesSectionComponent } from './settings-favorites-section.component';
+import { SettingsM3uExportSectionComponent } from './settings-m3u-export-section.component';
 import {
     ChangeDetectionStrategy,
     Component,
@@ -27,12 +28,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { SettingsSyncStatusComponent } from './settings-sync-status.component';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideFormFieldDefaults } from '@iptvnator/ui/components/form-field-defaults';
 import { SettingsActivitySectionComponent } from './settings-activity-section.component';
-import { PlaylistsService, ServerStorageStatusService, readServerAccessToken } from '@iptvnator/services';
 import { createRandomId, type Playlist } from '@iptvnator/shared/interfaces';
 import {
     normalizeSourceServerUrl,
@@ -58,14 +56,13 @@ import {
         SettingsFavoritesSectionComponent,
         SettingsHistorySectionComponent,
         SettingsSyncStatusComponent,
+        SettingsM3uExportSectionComponent,
         MatIconModule,
         FormsModule,
         ReactiveFormsModule,
         MatButtonModule,
         MatFormFieldModule,
         MatInputModule,
-        MatSelectModule,
-        MatSlideToggleModule,
         TranslateModule,
     ],
     templateUrl: './settings-server-section.component.html',
@@ -77,98 +74,6 @@ export class SettingsServerSectionComponent {
     readonly sync = inject(SourceSyncService);
     readonly supportsHosting = inject(RuntimeCapabilitiesService)
         .supportsHostedServer;
-    private readonly playlistsService = inject(PlaylistsService);
-    private readonly serverStatusService = inject(ServerStorageStatusService);
-
-    readonly allPlaylists = signal<Playlist[]>([]);
-    readonly selectedExportPlaylist = signal<string>('all');
-    readonly selectedExportType = signal<string>('all');
-    readonly copiedApiUrl = signal<boolean>(false);
-    readonly serverToken = signal<string>(readServerAccessToken() || '');
-    readonly proxyEnabled = signal<boolean>(this.loadProxyEnabled());
-
-    private loadProxyEnabled(): boolean {
-        if (typeof window === 'undefined') return true;
-        try {
-            const saved = localStorage.getItem('iptvnator_stream_proxy_enabled');
-            if (saved !== null) return saved === 'true';
-        } catch { /* Ignore */ }
-        return !!window.__IPTVNATOR_CONFIG__?.STREAM_PROXY_ENABLED;
-    }
-
-    setProxyEnabled(enabled: boolean): void {
-        this.proxyEnabled.set(enabled);
-        if (typeof window !== 'undefined') {
-            try {
-                localStorage.setItem('iptvnator_stream_proxy_enabled', String(enabled));
-                if (window.__IPTVNATOR_CONFIG__) {
-                    window.__IPTVNATOR_CONFIG__.STREAM_PROXY_ENABLED = enabled;
-                }
-            } catch { /* Ignore */ }
-        }
-    }
-
-    readonly exportedApiUrl = computed(() => {
-        const origin = window.location.origin;
-        const target = this.selectedExportPlaylist();
-        const token =
-            this.serverToken().trim() ||
-            this.serverStatusService.accessToken() ||
-            readServerAccessToken() ||
-            '';
-        const proxy = this.proxyEnabled();
-        const streamType = this.selectedExportType();
-
-        let path = '/api/m3u';
-        if (token) path += `/token/${encodeURIComponent(token)}`;
-        if (target && target !== 'all') path += `/${encodeURIComponent(target)}`;
-        if (streamType && streamType !== 'all') path += `/type/${encodeURIComponent(streamType)}`;
-        if (!proxy) path += '/direct';
-        const file =
-            streamType === 'live'
-                ? 'live.m3u'
-                : streamType === 'movie' || streamType === 'movies'
-                ? 'movies.m3u'
-                : streamType === 'series'
-                ? 'series.m3u'
-                : 'playlist.m3u';
-        return `${origin}${path}/${file}`;
-    });
-
-    constructor() {
-        this.loadPlaylists();
-    }
-
-    private loadPlaylists(): void {
-        this.playlistsService.getAllPlaylists().subscribe({
-            next: (playlists: Playlist[]) => {
-                this.allPlaylists.set(playlists ?? []);
-            },
-            error: () => {
-                this.allPlaylists.set([]);
-            },
-        });
-    }
-
-    getPlaylistLabel(pl: Playlist): string {
-        const title = pl.title || pl.filename || 'Untitled Playlist';
-        if (pl.serverUrl) return `${title} (Xtream)`;
-        if (pl.macAddress) return `${title} (Stalker)`;
-        if (typeof pl.count === 'number' && pl.count > 0) return `${title} (${pl.count} channels)`;
-        return title;
-    }
-
-    async copyExportUrl(): Promise<void> {
-        const url = this.exportedApiUrl();
-        if (!url) return;
-        try {
-            await navigator.clipboard.writeText(url);
-            this.copiedApiUrl.set(true);
-            setTimeout(() => this.copiedApiUrl.set(false), 2500);
-        } catch {
-            // Clipboard write fallback
-        }
-    }
 
     readonly hostedServer = viewChild(SettingsHostedServerComponent);
     readonly localServerUrl = computed(

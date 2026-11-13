@@ -7,7 +7,7 @@
  * VPS server stream proxy.
  */
 
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import type { ServerStorage } from './storage/server-storage';
 import { legacySourceDocument } from './storage/legacy-source-document';
 import { streamXtreamM3u } from './m3u-export-xtream';
@@ -21,33 +21,14 @@ import {
     escapeAttr,
     buildProxiedStreamUrl,
 } from './m3u-export-classifier';
+import { sharedStreamCatalog } from './stream-catalog-service';
 
-export function createM3uExportRouter(
+export function createExportHandler(
     storage: ServerStorage | null,
     accessToken: string | null,
     uiPassword?: string | null
-): Router {
-    const router = Router();
-
-    const checkAuth = (req: Request, res: Response, next: () => void) => {
-        if (!accessToken && !uiPassword) {
-            return next();
-        }
-
-        const providedToken = extractRequestToken(req);
-        if (
-            (accessToken && providedToken === accessToken) ||
-            (uiPassword && providedToken === uiPassword)
-        ) {
-            return next();
-        }
-
-        res.status(401).send(
-            '#EXTM3U\n# Unauthorized: Invalid or missing access token\n'
-        );
-    };
-
-    const exportHandler = async (req: Request, res: Response) => {
+): (req: Request, res: Response) => Promise<void> {
+    return async (req: Request, res: Response) => {
         if (!storage) {
             res.status(503).send('#EXTM3U\n# Error: Server storage is disabled\n');
             return;
@@ -103,47 +84,82 @@ export function createM3uExportRouter(
 
         await streamM3uPlaylists(allPlaylists, req, res, effectiveToken, streamType);
     };
+}
+
+export function createM3uExportRouter(
+    storage: ServerStorage | null,
+    accessToken: string | null,
+    uiPassword?: string | null,
+    customExportHandler?: (req: Request, res: Response) => Promise<void>
+): Router {
+    const router = Router();
+    const exportHandler = customExportHandler || createExportHandler(storage, accessToken, uiPassword);
+
+    const checkAuth = (req: Request, res: Response, next: () => void) => {
+        if (!accessToken && !uiPassword) {
+            return next();
+        }
+
+        const providedToken = extractRequestToken(req);
+        if (
+            (accessToken && providedToken === accessToken) ||
+            (uiPassword && providedToken === uiPassword)
+        ) {
+            return next();
+        }
+
+        res.status(401).send(
+            '#EXTM3U\n# Unauthorized: Invalid or missing access token\n'
+        );
+    };
+
+    router.get(['/m3u/status', '/api/m3u/status'], (_req: Request, res: Response) => {
+        const count = storage ? storage.playlists.count() : 0;
+        res.json({ count });
+    });
+
+    router.post(
+        ['/m3u/sync', '/api/m3u/sync'],
+        checkAuth,
+        express.json({ limit: '64mb' }),
+        (req: Request, res: Response) => {
+            if (!storage) {
+                res.status(503).json({ error: 'Server storage disabled' });
+                return;
+            }
+            const body = req.body;
+            const playlists = Array.isArray(body?.playlists) ? body.playlists : [];
+            let imported = 0;
+            for (const p of playlists) {
+                if (!p || typeof p !== 'object') continue;
+                const id = String(p['_id'] || p['id'] || '');
+                if (!id) continue;
+                storage.playlists.upsert(p as Record<string, unknown>, { keepPayload: false });
+                imported++;
+            }
+            res.json({ success: true, imported, total: storage.playlists.count() });
+        }
+    );
 
     const routes = [
-        '/m3u',
-        '/m3u.m3u',
-        '/playlist.m3u',
-        '/live.m3u',
-        '/movies.m3u',
-        '/series.m3u',
-        '/m3u/playlist.m3u',
-        '/m3u/live.m3u',
-        '/m3u/movies.m3u',
-        '/m3u/series.m3u',
-        '/m3u/:id',
-        '/m3u/:id.m3u',
-        '/m3u/:id/playlist.m3u',
-        '/m3u/token/:token/playlist.m3u',
-        '/m3u/token/:token/live.m3u',
-        '/m3u/token/:token/movies.m3u',
-        '/m3u/token/:token/series.m3u',
-        '/m3u/token/:token/direct/playlist.m3u',
-        '/m3u/token/:token/type/:type/playlist.m3u',
-        '/m3u/token/:token/type/:type/direct/playlist.m3u',
-        '/m3u/token/:token/:id/playlist.m3u',
-        '/m3u/token/:token/:id.m3u',
-        '/m3u/token/:token/:id/type/:type/playlist.m3u',
-        '/m3u/token/:token/:id/direct/playlist.m3u',
-        '/m3u/type/:type/playlist.m3u',
-        '/m3u/direct/playlist.m3u',
-        /^\/(?:api\/)?(?:m3u|playlist|live|movies|series)(?:\.m3u)?$/,
+        /^\/(?:api\/)?(?:m3u|playlist|live|movies|series)(?:\.m3u8?)?$/,
         /^\/(?:api\/)?m3u\/token\/([^/]+)\/(?:playlist|live|movies|series)\.m3u$/,
-        /^\/(?:api\/)?m3u\/token\/([^/]+)\/(.+?)\/(?:playlist|live|movies|series)\.m3u$/,
-        /^\/(?:api\/)?m3u\/(.+?)(?:\.m3u8?)?$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/direct\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/type\/([^/]+)\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/type\/([^/]+)\/direct\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/([^/]+)\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/([^/]+)\/direct\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/([^/]+)\/type\/([^/]+)\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/token\/([^/]+)\/([^/]+)\.m3u$/,
+        /^\/(?:api\/)?m3u\/type\/([^/]+)\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/direct\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/([^/]+)\/(?:playlist|live|movies|series)\.m3u$/,
+        /^\/(?:api\/)?m3u\/([^/]+)(?:\.m3u8?)?$/,
     ];
 
     for (const r of routes) {
         router.get(r, checkAuth, exportHandler);
         router.head(r, checkAuth, exportHandler);
-        if (typeof r === 'string') {
-            router.get(`/api${r}`, checkAuth, exportHandler);
-            router.head(`/api${r}`, checkAuth, exportHandler);
-        }
     }
 
     return router;
@@ -192,6 +208,15 @@ async function streamM3uPlaylists(
         res.write('#EXTM3U\n');
     }
 
+    if (playlists.length === 0) {
+        res.write(
+            '#EXTINF:-1 tvg-id="" tvg-name="No Playlists on Server" group-title="IPTVnator | Setup",No Playlists Found - Please Sync in Settings\n' +
+            `${hostBase}/live/info.ts\n`
+        );
+        res.end();
+        return;
+    }
+
     const allEntries: M3uExportEntry[] = [];
     const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
 
@@ -233,6 +258,8 @@ async function streamM3uPlaylists(
             const groupTitle = formatCategory(rawGroup, contentType);
             const tvgLogo = tvg['logo'] || '';
             const rawTvgId = tvg['id'] || '';
+
+            sharedStreamCatalog.register({ id: name, type: contentType, url: rawUrl, name });
 
             if (contentType === 'series') {
                 const parsed = parseSeriesEpisode(name, rawGroup);
@@ -293,13 +320,9 @@ async function streamM3uPlaylists(
 
 function getHostBaseUrl(req: Request): string {
     const rawProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const protoStr = Array.isArray(rawProto) ? rawProto[0] : String(rawProto);
-    const proto = protoStr.split(',')[0].trim() || 'http';
-
+    const proto = (Array.isArray(rawProto) ? rawProto[0] : String(rawProto)).split(',')[0].trim() || 'http';
     const rawHost = req.headers['x-forwarded-host'] || req.headers['host'] || 'localhost';
-    const hostStr = Array.isArray(rawHost) ? rawHost[0] : String(rawHost);
-    const host = hostStr.split(',')[0].trim() || 'localhost';
-
+    const host = (Array.isArray(rawHost) ? rawHost[0] : String(rawHost)).split(',')[0].trim() || 'localhost';
     return `${proto}://${host}`;
 }
 

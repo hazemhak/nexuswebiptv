@@ -42,6 +42,7 @@ import {
     ProviderUrlPolicy,
     validateProviderUrl,
 } from './provider-url-policy';
+import { sharedStreamCatalog } from './stream-catalog-service';
 
 /** Headers we forward from the upstream stream response to the browser. */
 const FORWARDED_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
@@ -84,8 +85,29 @@ async function handleStreamProxy(
     res: Response,
     policy: ProviderUrlPolicy
 ): Promise<void> {
-    const rawUrl =
+    let rawUrl =
         typeof req.query['url'] === 'string' ? req.query['url'].trim() : '';
+
+    if (!rawUrl) {
+        const pathNoExt = req.path.replace(/\.[a-z0-9]+$/i, '');
+        const segments = pathNoExt.split('/').filter(Boolean);
+        const lastSegment = segments[segments.length - 1] || '';
+        if (lastSegment) {
+            const entry =
+                sharedStreamCatalog.lookup(lastSegment) ||
+                sharedStreamCatalog.lookup(decodeURIComponent(lastSegment));
+            if (entry) {
+                rawUrl = entry.url;
+            } else if (
+                lastSegment.startsWith('http%3A') ||
+                lastSegment.startsWith('https%3A') ||
+                lastSegment.startsWith('http:') ||
+                lastSegment.startsWith('https:')
+            ) {
+                rawUrl = decodeURIComponent(lastSegment);
+            }
+        }
+    }
 
     if (!rawUrl) {
         res.status(400).json({ message: 'Missing url parameter', status: 400 });

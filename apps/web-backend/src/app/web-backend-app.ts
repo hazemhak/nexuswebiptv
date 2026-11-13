@@ -1,6 +1,7 @@
 import { mountTvSetup } from './tv-setup/pairing-router';
 import { mountStreamProxy } from './stream-proxy-router';
-import { createM3uExportRouter } from './m3u-export-router';
+import { createM3uExportRouter, createExportHandler } from './m3u-export-router';
+import { createXtreamApiRouter } from './xtream-api-router';
 import cors from 'cors';
 import express, { Express, Request, Response } from 'express';
 import { ProviderTargetRegistry } from './provider-target-registry';
@@ -166,18 +167,36 @@ export function createWebBackendApp(
     // Stream proxy: pipe IPTV streams through the server so all video traffic
     // originates from the host device rather than the user's browser.
     // Endpoint: GET /stream-proxy?url=<encoded-stream-url>
-    app.options(/^\/(?:api\/)?(?:stream-proxy|live|movie|series)(?:\/.*)?$/, corsMiddleware);
+    app.options(
+        /^\/(?:api\/)?(?:stream-proxy|live|movie|series|player_api|get|xmltv)(?:\/.*)?$/,
+        corsMiddleware
+    );
     mountStreamProxy(app, providerUrlPolicy);
 
-    // M3U export: allows external players (TiviMate, VLC, Kodi) to pull
-    // playlists with all streams rewritten through the server proxy.
-    // Endpoints: GET /m3u, GET /m3u/:id
+    const m3uExportHandler = createExportHandler(
+        options.storage ?? null,
+        options.accessToken ?? null,
+        options.uiPassword ?? null
+    );
+
+    // M3U export & Xtream Codes API endpoints for external players (IPTV Smarters, TiviMate, VLC, Kodi)
     app.use(
         corsMiddleware,
         createM3uExportRouter(
             options.storage ?? null,
             options.accessToken ?? null,
-            options.uiPassword ?? null
+            options.uiPassword ?? null,
+            m3uExportHandler
+        )
+    );
+
+    app.use(
+        corsMiddleware,
+        createXtreamApiRouter(
+            options.storage ?? null,
+            options.accessToken ?? null,
+            options.uiPassword ?? null,
+            m3uExportHandler
         )
     );
 
