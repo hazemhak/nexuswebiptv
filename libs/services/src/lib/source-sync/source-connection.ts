@@ -82,6 +82,40 @@ export async function prepareSourceConnection(
         const saved = localStorage.getItem(CONNECTION_KEY);
         if (saved) {
             selected = parseSourceConnection(saved);
+            if (!runtimeBackendUrl || localStorage.getItem(DISABLED_KEY))
+                return;
+            try {
+                const parsed = new URL(runtimeBackendUrl, location.href);
+                const runtimeApiUrl = parsed.toString().replace(/\/$/, '');
+                if (selected.apiUrl === runtimeApiUrl) {
+                    const response = await fetch(
+                        `${runtimeApiUrl}/v1/instance`,
+                        {
+                            signal: AbortSignal.timeout(3000),
+                            redirect: 'error',
+                        }
+                    );
+                    if (response.ok) {
+                        const instance =
+                            (await response.json()) as ServerInstanceInfo;
+                        if (
+                            instance.instanceId &&
+                            instance.instanceId !== selected.instanceId
+                        ) {
+                            selected = {
+                                apiUrl: runtimeApiUrl,
+                                instanceId: instance.instanceId,
+                            };
+                            localStorage.setItem(
+                                CONNECTION_KEY,
+                                JSON.stringify(selected)
+                            );
+                        }
+                    }
+                }
+            } catch {
+                // Keep existing selected if probe fails
+            }
             return;
         }
         if (!runtimeBackendUrl || localStorage.getItem(DISABLED_KEY)) return;
