@@ -589,7 +589,7 @@
         "STRIP_COUNTRY_PREFIX": "Strip country prefixes from channel names",
         "STRIP_COUNTRY_PREFIX_DESCRIPTION": "Removes country/group prefixes like \"US | \" or \"UK - \" from live channel names throughout the app.",
         "VERSION_DESCRIPTION": "Current version of the application",
-        "ABOUT_SUBTITLE": "Version, project links and ways to support IPTVnator.",
+        "ABOUT_SUBTITLE": "Version and application details for Nexus Web IPTV.",
         "EMBEDDED_MPV_NOTICE_TITLE": "Embedded MPV runtime",
         "EMBEDDED_MPV_NOTICE_DESCRIPTION": "Desktop builds can include bundled libmpv and FFmpeg libraries for the experimental Embedded MPV player. Users do not need to install the MPV app separately; external MPV and VLC remain available as fallback players.",
         "COMMUNITY": "Project & community",

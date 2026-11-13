@@ -589,7 +589,7 @@
         "STRIP_COUNTRY_PREFIX": "إزالة بادئات البلد من أسماء القنوات",
         "STRIP_COUNTRY_PREFIX_DESCRIPTION": "يزيل بادئات البلد/المجموعة مثل \"US | \" أو \"UK - \" من أسماء قنوات البث المباشر في جميع أنحاء التطبيق.",
         "VERSION_DESCRIPTION": "الإصدار الحالي للتطبيق",
-        "ABOUT_SUBTITLE": "الإصدار وروابط المشروع وطرق دعم IPTVnator.",
+        "ABOUT_SUBTITLE": "معلومات الإصدار وتفاصيل تطبيق Nexus Web IPTV.",
         "EMBEDDED_MPV_NOTICE_TITLE": "بيئة تشغيل MPV المضمّنة",
         "EMBEDDED_MPV_NOTICE_DESCRIPTION": "يمكن أن تتضمن إصدارات سطح المكتب مكتبتي libmpv و FFmpeg المرفقتين لمشغل MPV المضمّن التجريبي. لا يحتاج المستخدمون إلى تثبيت تطبيق MPV بشكل منفصل؛ ويبقى MPV و VLC الخارجيان متاحين كمشغلين احتياطيين.",
         "COMMUNITY": "المشروع والمجتمع",
