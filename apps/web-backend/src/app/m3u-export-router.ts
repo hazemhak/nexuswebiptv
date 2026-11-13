@@ -22,11 +22,14 @@
 import { Router, Request, Response } from 'express';
 import type { ServerStorage } from './storage/server-storage';
 import { legacySourceDocument } from './storage/legacy-source-document';
+import { streamXtreamM3u } from './m3u-export-xtream';
 import {
-    streamXtreamM3u,
+    detectContentType,
     formatMovieCategory,
     formatSeriesCategory,
-} from './m3u-export-xtream';
+    escapeAttr,
+    buildProxiedStreamUrl,
+} from './m3u-export-classifier';
 
 export function createM3uExportRouter(
     storage: ServerStorage | null,
@@ -122,10 +125,12 @@ async function streamM3uPlaylists(
         typeof req.query['output'] === 'string' && req.query['output'].trim()
             ? req.query['output'].trim()
             : '';
-    const streamType =
-        typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()
-            ? req.query['stream_type'].trim()
-            : '';
+    const rawType =
+        (typeof req.query['stream_type'] === 'string' ? req.query['stream_type'] : '') ||
+        (typeof req.query['type'] === 'string' && req.query['type'] !== 'm3u' && req.query['type'] !== 'm3u_plus'
+            ? req.query['type']
+            : '');
+    const streamType = rawType.trim().toLowerCase();
     const playlistWithEpg = playlists.find(
         (p) => Array.isArray(p['epgUrls']) && p['epgUrls'].length > 0
     );
@@ -167,22 +172,20 @@ async function streamM3uPlaylists(
             const rawUrl = (item['url'] as string) || '';
             if (!rawUrl) continue;
 
-            const isMovie =
-                rawUrl.includes('/movie/') ||
-                rawUrl.includes('/vod/') ||
-                /\.(mp4|mkv|avi)(\?|$)/i.test(rawUrl);
-            const isSeries = rawUrl.includes('/series/');
-
-            if (streamType === 'live' && (isMovie || isSeries)) continue;
-            if ((streamType === 'movie' || streamType === 'vod' || streamType === 'movies') && !isMovie) continue;
-            if ((streamType === 'series' || streamType === 'tvshows' || streamType === 'tv') && !isSeries) continue;
-
             const name = (item['name'] as string) || 'Channel';
             const tvg = (item['tvg'] as Record<string, string>) || {};
             const group = (item['group'] as Record<string, string>) || {};
-            let groupTitle = group['title'] || playlistTitle;
-            if (isMovie) groupTitle = formatMovieCategory(groupTitle);
-            else if (isSeries) groupTitle = formatSeriesCategory(groupTitle);
+            const rawGroup = group['title'] || playlistTitle;
+
+            const contentType = detectContentType(rawUrl, name, rawGroup);
+
+            if (streamType === 'live' && contentType !== 'live') continue;
+            if ((streamType === 'movie' || streamType === 'vod' || streamType === 'movies') && contentType !== 'movie') continue;
+            if ((streamType === 'series' || streamType === 'tvshows' || streamType === 'tv') && contentType !== 'series') continue;
+
+            let groupTitle = rawGroup;
+            if (contentType === 'movie') groupTitle = formatMovieCategory(rawGroup);
+            else if (contentType === 'series') groupTitle = formatSeriesCategory(rawGroup);
 
             const tvgId = tvg['id'] || '';
             const tvgName = tvg['name'] || name;
@@ -194,18 +197,10 @@ async function streamM3uPlaylists(
             if (tvgLogo) extinfParts.push(`tvg-logo="${escapeAttr(tvgLogo)}"`);
             if (groupTitle) extinfParts.push(`group-title="${escapeAttr(groupTitle)}"`);
 
-            let streamUrl = rawUrl;
-            if (useProxy) {
-                const sub = isMovie
-                    ? 'movie/video.mp4'
-                    : isSeries
-                      ? 'series/video.mp4'
-                      : 'live/stream.ts';
-                streamUrl = `${proxyBase}/stream-proxy/${sub}?url=${encodeURIComponent(rawUrl)}`;
-                if (serverToken) {
-                    streamUrl += `&token=${encodeURIComponent(serverToken)}`;
-                }
-            }
+            const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
+            const streamUrl = useProxy
+                ? buildProxiedStreamUrl(proxyBase, contentType, rawUrl, tokenParam)
+                : rawUrl;
 
             res.write(`${extinfParts.join(' ')},${name}\n${streamUrl}\n`);
         }
@@ -224,10 +219,6 @@ function getProxyBaseUrl(req: Request): string {
     const host = hostStr.split(',')[0].trim() || 'localhost';
 
     return `${proto}://${host}/api`;
-}
-
-function escapeAttr(val: string): string {
-    return val.replace(/"/g, "'");
 }
 
 function extractRequestToken(req: Request): string {
