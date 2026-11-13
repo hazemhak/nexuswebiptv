@@ -103,6 +103,8 @@ async function streamM3uPlaylists(
     serverToken: string | null
 ): Promise<void> {
     const proxyBase = getProxyBaseUrl(req);
+    const proxyQuery = typeof req.query['proxy'] === 'string' ? req.query['proxy'].trim().toLowerCase() : '';
+    const useProxy = proxyQuery !== '0' && proxyQuery !== 'false' && proxyQuery !== 'no';
     res.write('#EXTM3U\n');
 
     for (const p of playlists) {
@@ -128,7 +130,8 @@ async function streamM3uPlaylists(
                 streamType,
                 proxyBase,
                 serverToken,
-                res
+                res,
+                useProxy
             );
             continue;
         }
@@ -156,12 +159,15 @@ async function streamM3uPlaylists(
             if (tvgLogo) extinfParts.push(`tvg-logo="${escapeAttr(tvgLogo)}"`);
             if (groupTitle) extinfParts.push(`group-title="${escapeAttr(groupTitle)}"`);
 
-            let proxiedUrl = `${proxyBase}/stream-proxy?url=${encodeURIComponent(rawUrl)}`;
-            if (serverToken) {
-                proxiedUrl += `&token=${encodeURIComponent(serverToken)}`;
+            let streamUrl = rawUrl;
+            if (useProxy) {
+                streamUrl = `${proxyBase}/stream-proxy?url=${encodeURIComponent(rawUrl)}`;
+                if (serverToken) {
+                    streamUrl += `&token=${encodeURIComponent(serverToken)}`;
+                }
             }
 
-            res.write(`${extinfParts.join(' ')},${name}\n${proxiedUrl}\n`);
+            res.write(`${extinfParts.join(' ')},${name}\n${streamUrl}\n`);
         }
     }
 

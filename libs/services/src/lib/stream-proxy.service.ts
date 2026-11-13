@@ -72,6 +72,16 @@ export class StreamProxyService {
      * Callers can use this to adjust UI (e.g. show a "via server" badge).
      */
     isEnabled(): boolean {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('iptvnator_stream_proxy_enabled');
+                if (saved !== null) {
+                    return saved === 'true';
+                }
+            } catch {
+                // Ignore localStorage errors
+            }
+        }
         return !!window.__IPTVNATOR_CONFIG__?.STREAM_PROXY_ENABLED;
     }
 

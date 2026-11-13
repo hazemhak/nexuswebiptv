@@ -51,6 +51,32 @@
         font-size: 12px;
     }
 }
+
+.proxy-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 4px 0;
+}
+
+.proxy-toggle-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.proxy-toggle-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--app-heading-color);
+}
+
+.proxy-toggle-desc {
+    font-size: 12px;
+    color: var(--app-body-color);
+    line-height: 1.4;
+}
 .server-actions {
     display: flex;
     align-items: center;

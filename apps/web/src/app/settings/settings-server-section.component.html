@@ -304,6 +304,25 @@
             <mat-hint>Your server password. Appended to the URL so external players are authenticated.</mat-hint>
         </mat-form-field>
 
+        <div class="proxy-toggle-row">
+            <div class="proxy-toggle-meta">
+                <span class="proxy-toggle-title">Stream Proxy</span>
+                <span class="proxy-toggle-desc">
+                    @if (proxyEnabled()) {
+                        Stream traffic routes through your server (bypassing CORS, ISP blocks, and geo-restrictions).
+                    } @else {
+                        Streams connect directly to your IPTV provider without server proxying.
+                    }
+                </span>
+            </div>
+            <mat-slide-toggle
+                [checked]="proxyEnabled()"
+                (change)="setProxyEnabled($event.checked)"
+                aria-label="Toggle Stream Proxy"
+                color="primary"
+            ></mat-slide-toggle>
+        </div>
+
         <mat-form-field appearance="outline">
             <mat-label>Generated M3U Stream API URL</mat-label>
             <input

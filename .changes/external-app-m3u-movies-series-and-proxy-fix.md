@@ -1,6 +1,6 @@
 ---
 type: fix
-area: server
+area: settings
 ---
 
-Export Xtream movies and series via player_api JSON endpoints with category grouping, TV show season/episode formatting, and multi-path stream proxy support.
+Add stream proxy toggle to settings to enable or disable proxying for in-app playback and external M3U exports.

@@ -28,6 +28,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { SettingsSyncStatusComponent } from './settings-sync-status.component';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideFormFieldDefaults } from '@iptvnator/ui/components/form-field-defaults';
 import { SettingsActivitySectionComponent } from './settings-activity-section.component';
@@ -64,6 +65,7 @@ import {
         MatFormFieldModule,
         MatInputModule,
         MatSelectModule,
+        MatSlideToggleModule,
         TranslateModule,
     ],
     templateUrl: './settings-server-section.component.html',
@@ -82,6 +84,32 @@ export class SettingsServerSectionComponent {
     readonly selectedExportPlaylist = signal<string>('all');
     readonly copiedApiUrl = signal<boolean>(false);
     readonly serverToken = signal<string>(readServerAccessToken() || '');
+    readonly proxyEnabled = signal<boolean>(this.loadProxyEnabled());
+
+    private loadProxyEnabled(): boolean {
+        if (typeof window === 'undefined') return true;
+        try {
+            const saved = localStorage.getItem('iptvnator_stream_proxy_enabled');
+            if (saved !== null) return saved === 'true';
+        } catch {
+            // Ignore storage errors
+        }
+        return !!window.__IPTVNATOR_CONFIG__?.STREAM_PROXY_ENABLED;
+    }
+
+    setProxyEnabled(enabled: boolean): void {
+        this.proxyEnabled.set(enabled);
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.setItem('iptvnator_stream_proxy_enabled', String(enabled));
+                if (window.__IPTVNATOR_CONFIG__) {
+                    window.__IPTVNATOR_CONFIG__.STREAM_PROXY_ENABLED = enabled;
+                }
+            } catch {
+                // Ignore storage errors
+            }
+        }
+    }
 
     readonly exportedApiUrl = computed(() => {
         const origin = window.location.origin;
@@ -92,7 +120,11 @@ export class SettingsServerSectionComponent {
             this.serverStatusService.accessToken() ||
             readServerAccessToken() ||
             '';
-        return token ? `${origin}${path}?token=${encodeURIComponent(token)}` : `${origin}${path}`;
+        const params: string[] = [];
+        if (token) params.push(`token=${encodeURIComponent(token)}`);
+        if (!this.proxyEnabled()) params.push('proxy=0');
+        const query = params.length > 0 ? `?${params.join('&')}` : '';
+        return `${origin}${path}${query}`;
     });
 
     constructor() {

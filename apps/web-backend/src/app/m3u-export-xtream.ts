@@ -11,22 +11,23 @@ export async function streamXtreamM3u(
     streamType: string,
     proxyBase: string,
     serverToken: string | null,
-    res: Response
+    res: Response,
+    useProxy = true
 ): Promise<void> {
     const cleanServer = serverUrl.replace(/\/+$/, '');
     const userEnc = encodeURIComponent(username);
     const passEnc = encodeURIComponent(password);
 
     if (streamType === 'movie' || streamType === 'vod') {
-        await streamMovies(cleanServer, userEnc, passEnc, proxyBase, serverToken, res);
+        await streamMovies(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
         return;
     }
     if (streamType === 'series') {
-        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res);
+        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
         return;
     }
     if (streamType === 'live') {
-        await streamLive(cleanServer, userEnc, passEnc, outputFormat, proxyBase, serverToken, res);
+        await streamLive(cleanServer, userEnc, passEnc, outputFormat, proxyBase, serverToken, res, useProxy);
         return;
     }
 
@@ -38,15 +39,16 @@ export async function streamXtreamM3u(
         outputFormat,
         proxyBase,
         serverToken,
-        res
+        res,
+        useProxy
     );
 
     if (vodCount === 0 && !res.writableEnded) {
-        await streamMovies(cleanServer, userEnc, passEnc, proxyBase, serverToken, res);
+        await streamMovies(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
     }
 
     if (seriesCount === 0 && !res.writableEnded) {
-        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res);
+        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
     }
 }
 
@@ -57,11 +59,12 @@ async function streamLive(
     outputFormat: string,
     proxyBase: string,
     serverToken: string | null,
-    res: Response
+    res: Response,
+    useProxy = true
 ): Promise<{ streamCount: number; vodCount: number; seriesCount: number }> {
     let liveUrl = `${cleanServer}/get.php?username=${userEnc}&password=${passEnc}&type=m3u_plus`;
     if (outputFormat) liveUrl += `&output=${encodeURIComponent(outputFormat)}`;
-    return streamM3uFromUrl(liveUrl, cleanServer, proxyBase, serverToken, res);
+    return streamM3uFromUrl(liveUrl, cleanServer, proxyBase, serverToken, res, useProxy);
 }
 
 async function streamMovies(
@@ -70,7 +73,8 @@ async function streamMovies(
     passEnc: string,
     proxyBase: string,
     serverToken: string | null,
-    res: Response
+    res: Response,
+    useProxy = true
 ): Promise<void> {
     const catUrl = `${cleanServer}/player_api.php?username=${userEnc}&password=${passEnc}&action=get_vod_categories`;
     const categories = await fetchXtreamJson<Array<{ category_id?: string | number; category_name?: string }>>(catUrl);
@@ -103,8 +107,9 @@ async function streamMovies(
         const catName = (item.category_id && catMap.get(String(item.category_id))) || 'Movies';
         const movieStreamUrl = `${cleanServer}/movie/${userEnc}/${passEnc}/${item.stream_id}.${ext}`;
         const proxied = `${proxyBase}/stream-proxy/movie/${item.stream_id}.${ext}?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
+        const finalUrl = useProxy ? proxied : movieStreamUrl;
         const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="movie",${name}`;
-        res.write(`${extinf}\n${proxied}\n`);
+        res.write(`${extinf}\n${finalUrl}\n`);
     }
 }
 
@@ -114,7 +119,8 @@ async function streamSeries(
     passEnc: string,
     proxyBase: string,
     serverToken: string | null,
-    res: Response
+    res: Response,
+    useProxy = true
 ): Promise<void> {
     const catUrl = `${cleanServer}/player_api.php?username=${userEnc}&password=${passEnc}&action=get_series_categories`;
     const categories = await fetchXtreamJson<Array<{ category_id?: string | number; category_name?: string }>>(catUrl);
@@ -176,8 +182,9 @@ async function streamSeries(
                         : `${seriesName} S${s}E${e}`;
                     const epUrl = `${cleanServer}/series/${userEnc}/${passEnc}/${ep.id}.${ext}`;
                     const proxied = `${proxyBase}/stream-proxy/series/${ep.id}.${ext}?url=${encodeURIComponent(epUrl)}${tokenParam}`;
+                    const finalUrl = useProxy ? proxied : epUrl;
                     const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="series",${epTitle}`;
-                    res.write(`${extinf}\n${proxied}\n`);
+                    res.write(`${extinf}\n${finalUrl}\n`);
                 }
             }
         }
@@ -193,6 +200,7 @@ function streamM3uFromUrl(
     proxyBase: string,
     serverToken: string | null,
     res: Response,
+    useProxy = true,
     hopCount = 0
 ): Promise<{ streamCount: number; vodCount: number; seriesCount: number }> {
     if (hopCount > 5) return Promise.resolve({ streamCount: 0, vodCount: 0, seriesCount: 0 });
@@ -220,7 +228,7 @@ function streamM3uFromUrl(
                 if (status >= 300 && status < 400 && upstream.headers.location) {
                     upstream.resume();
                     const redirectUrl = new URL(upstream.headers.location, targetUrl).href;
-                    return resolve(streamM3uFromUrl(redirectUrl, cleanServer, proxyBase, serverToken, res, hopCount + 1));
+                    return resolve(streamM3uFromUrl(redirectUrl, cleanServer, proxyBase, serverToken, res, useProxy, hopCount + 1));
                 }
 
                 if (status !== 200) {
@@ -261,7 +269,8 @@ function streamM3uFromUrl(
 
                         const typePrefix = isVod ? 'movie/' : isSeries ? 'series/' : '';
                         const proxied = `${proxyBase}/stream-proxy/${typePrefix}?url=${encodeURIComponent(fullUrl)}${tokenParam}`.replace('/stream-proxy//', '/stream-proxy/');
-                        res.write(proxied + '\n');
+                        const finalUrl = useProxy ? proxied : fullUrl;
+                        res.write(finalUrl + '\n');
                     }
                 });
 
