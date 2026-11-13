@@ -90,9 +90,21 @@
     @if (
         (showProgramInfoButton() && showEpg()) ||
         showFavoriteButton() ||
+        showCopyButton() ||
         showAuxActionButton()
     ) {
         <div class="action-buttons">
+            @if (showCopyButton()) {
+                <button
+                    mat-icon-button
+                    class="copy-stream-button"
+                    [matTooltip]="'PORTALS.COPY_STREAM_URL' | translate"
+                    [attr.aria-label]="'PORTALS.COPY_STREAM_URL' | translate"
+                    (click)="onCopyClick($event)"
+                >
+                    <mat-icon>content_copy</mat-icon>
+                </button>
+            }
             @if (showFavoriteButton()) {
                 <button
                     mat-icon-button

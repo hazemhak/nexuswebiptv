@@ -433,4 +433,20 @@ describe('ChannelListItemComponent with an EPG display offset', () => {
         // The row still hands the raw programme to consumers (dialog, catch-up).
         expect(program.startTimestamp).toBe(startTimestamp);
     });
+
+    it('renders a copy button when showCopyButton is true and emits copyClicked', () => {
+        fixture.componentRef.setInput('name', 'News Channel');
+        fixture.componentRef.setInput('showCopyButton', true);
+        fixture.detectChanges();
+
+        const copyButton = fixture.nativeElement.querySelector(
+            '.copy-stream-button'
+        ) as HTMLButtonElement;
+        expect(copyButton).not.toBeNull();
+
+        const copySpy = jest.fn();
+        fixture.componentInstance.copyClicked.subscribe(copySpy);
+        copyButton.click();
+        expect(copySpy).toHaveBeenCalledTimes(1);
+    });
 });

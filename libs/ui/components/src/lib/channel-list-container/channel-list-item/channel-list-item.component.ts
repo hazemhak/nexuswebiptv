@@ -52,6 +52,7 @@ export class ChannelListItemComponent {
         )
     );
     readonly showFavoriteButton = input(false);
+    readonly showCopyButton = input(false);
     readonly showAuxActionButton = input(false);
     readonly showProgramInfoButton = input(true);
     readonly showDetailsContextMenu = input(false);
@@ -80,6 +81,7 @@ export class ChannelListItemComponent {
     /** Explicit keyboard playback, independent of the pointer double-click preference. */
     readonly keyboardActivated = output<void>();
     readonly favoriteToggled = output<MouseEvent>();
+    readonly copyClicked = output<MouseEvent>();
     readonly auxActionClicked = output<MouseEvent>();
     readonly contextMenuRequested = output<MouseEvent>();
 
@@ -142,6 +144,11 @@ export class ChannelListItemComponent {
     onDoubleClick(): void {
         if (this.disabled()) return;
         this.activated.emit();
+    }
+
+    onCopyClick(event: MouseEvent): void {
+        event.stopPropagation();
+        this.copyClicked.emit(event);
     }
 
     onContextMenu(event: MouseEvent): void {

@@ -7,6 +7,12 @@
 ></div>
 
 <mat-menu #menu="matMenu">
+    @if (showCopyUrl()) {
+        <button mat-menu-item type="button" (click)="copyUrl.emit()">
+            <mat-icon>content_copy</mat-icon>
+            <span>{{ 'PORTALS.COPY_STREAM_URL' | translate }}</span>
+        </button>
+    }
     @if (showMapEpg()) {
         <button mat-menu-item type="button" (click)="mapEpg.emit()">
             <mat-icon>settings_remote</mat-icon>

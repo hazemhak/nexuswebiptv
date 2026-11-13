@@ -16,9 +16,15 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { EpgRuntimeBridgeService } from '@iptvnator/epg/data-access';
-import { EpgPreferencesService, SettingsStore } from '@iptvnator/services';
+import {
+    EpgPreferencesService,
+    LazySnackBar,
+    SettingsStore,
+    StreamProxyService,
+} from '@iptvnator/services';
+import { copyTextToClipboard } from '@iptvnator/services/clipboard-copy';
 import { resolveChannelEpgLookupKey } from '@iptvnator/m3u-state';
 import {
     foldSearchText,
@@ -72,6 +78,9 @@ export class AllChannelsViewComponent {
     private readonly dialog = inject(MatDialog);
     private readonly epgBridge = inject(EpgRuntimeBridgeService);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly streamProxy = inject(StreamProxyService);
+    private readonly snackBar = inject(LazySnackBar);
+    private readonly translate = inject(TranslateService);
     get supportsEpgMapping(): boolean {
         return (
             this.epgPreferences.enabled() && this.epgBridge.supportsEpgMapping
@@ -242,5 +251,31 @@ export class AllChannelsViewComponent {
             channelKey,
             channelName: channel.name ?? channelKey,
         });
+    }
+
+    async copyChannelStreamUrl(channel: Channel): Promise<void> {
+        try {
+            if (!channel?.url) return;
+            const copyable = this.streamProxy.rewriteForExternal(channel.url);
+            await copyTextToClipboard(copyable);
+            void this.snackBar.open(
+                this.translate.instant('PORTALS.STREAM_URL_COPIED'),
+                this.translate.instant('CLOSE'),
+                { duration: 2500 }
+            );
+        } catch {
+            void this.snackBar.open(
+                this.translate.instant('DOWNLOADS.URL_COPY_FAILED'),
+                this.translate.instant('CLOSE'),
+                { duration: 2500 }
+            );
+        }
+    }
+
+    async copyContextMenuChannelStreamUrl(): Promise<void> {
+        const channel = this.contextMenuChannel();
+        if (!channel) return;
+        this.channelContextMenu().close();
+        await this.copyChannelStreamUrl(channel);
     }
 }

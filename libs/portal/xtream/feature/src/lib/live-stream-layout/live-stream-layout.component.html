@@ -161,6 +161,16 @@
     @if (streamUrl) {
         @if (isEmbeddedPlayer) {
             <div class="video-player">
+                <button
+                    mat-icon-button
+                    type="button"
+                    class="live-player-copy-btn"
+                    [matTooltip]="'PORTALS.COPY_STREAM_URL' | translate"
+                    [attr.aria-label]="'PORTALS.COPY_STREAM_URL' | translate"
+                    (click)="copyActiveStreamUrl()"
+                >
+                    <mat-icon>content_copy</mat-icon>
+                </button>
                 <app-web-player-view
                     [playbackSessionKey]="playbackSessionKey()"
                     [streamUrl]="streamUrl"

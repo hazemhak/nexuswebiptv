@@ -41,8 +41,10 @@
                 (contextMenuRequested)="onChannelContextMenu(channel, $event)"
                 [selected]="activeChannelUrl() === channel?.url"
                 [showFavoriteButton]="true"
+                [showCopyButton]="true"
                 [isFavorite]="true"
                 (favoriteToggled)="onFavoriteToggle(channel, $event)"
+                (copyClicked)="copyChannelStreamUrl(channel)"
             />
         }
     } @else {
@@ -68,6 +70,8 @@
 <app-channel-context-menu
     [showMapEpg]="supportsEpgMapping"
     [showDetails]="true"
+    [showCopyUrl]="true"
     (mapEpg)="openEpgMapping()"
     (details)="openChannelDetails()"
+    (copyUrl)="copyContextMenuChannelStreamUrl()"
 />

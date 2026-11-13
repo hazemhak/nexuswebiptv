@@ -141,4 +141,18 @@ describe('ChannelContextMenuComponent', () => {
             'remove',
         ]);
     });
+
+    it('renders the copy stream URL option and emits copyUrl', async () => {
+        const menu = render({ showCopyUrl: true });
+        const copySpy = jest.fn();
+        menu.copyUrl.subscribe(copySpy);
+
+        await openAt(10, 20);
+
+        expect(rowTexts()).toEqual(['content_copy PORTALS.COPY_STREAM_URL']);
+        rows()[0].click();
+        fixture.detectChanges();
+
+        expect(copySpy).toHaveBeenCalledTimes(1);
+    });
 });

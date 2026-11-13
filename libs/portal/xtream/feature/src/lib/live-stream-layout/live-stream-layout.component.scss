@@ -5,6 +5,26 @@
 
 @include portal.live-layout;
 
+.video-player {
+    position: relative;
+
+    .live-player-copy-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 20;
+        background: rgba(0, 0, 0, 0.54);
+        color: #fff;
+        backdrop-filter: blur(4px);
+        transition: background-color 0.2s ease, transform 0.15s ease;
+
+        &:hover {
+            background: rgba(0, 0, 0, 0.85);
+            transform: scale(1.05);
+        }
+    }
+}
+
 // ─── Sidebar-header overrides ──────────────────────────────────────────────
 // Base .sidebar-header styles come from portal-sidebar
 .sidebar-header button {

@@ -48,20 +48,24 @@
                 [catchupAvailable]="isCatchupAvailable(item)"
                 [catchupDays]="catchupDays(item)"
                 [showFavoriteButton]="true"
+                [showCopyButton]="true"
                 [showProgramInfoButton]="true"
-                [showDetailsContextMenu]="supportsEpgMapping"
+                [showDetailsContextMenu]="true"
                 [isFavorite]="favorites.get(favoriteKeyFor(item)) ?? false"
                 (clicked)="playClicked.emit(item)"
                 (activated)="playbackRequested.emit(item)"
                 (keyboardActivated)="playbackRequested.emit(item)"
                 (favoriteToggled)="toggleFavorite($event, item)"
+                (copyClicked)="copyChannelStreamUrl(item)"
                 (contextMenuRequested)="onChannelContextMenu(item, $event)"
             />
         </cdk-virtual-scroll-viewport>
 
         <app-channel-context-menu
             [showMapEpg]="true"
+            [showCopyUrl]="true"
             (mapEpg)="openEpgMapping()"
+            (copyUrl)="copyContextMenuChannelStreamUrl()"
         />
     } @else {
         <div class="empty-search-state">

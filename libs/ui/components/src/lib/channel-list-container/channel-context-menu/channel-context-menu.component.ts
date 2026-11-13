@@ -34,6 +34,7 @@ export type ChannelContextMenuPoint = Pick<MouseEvent, 'clientX' | 'clientY'>;
 export class ChannelContextMenuComponent {
     readonly showMapEpg = input(false);
     readonly showDetails = input(false);
+    readonly showCopyUrl = input(false);
     /**
      * The playlist to offer "View in …" for; no row while null. An empty
      * name (a playlist saved without one) still shows the row.
@@ -43,12 +44,14 @@ export class ChannelContextMenuComponent {
 
     readonly mapEpg = output<void>();
     readonly details = output<void>();
+    readonly copyUrl = output<void>();
     readonly openInPlaylist = output<void>();
     readonly removeFromHistory = output<void>();
 
     protected readonly position = signal({ x: '0px', y: '0px' });
     protected readonly hasLeadingRows = computed(
         () =>
+            this.showCopyUrl() ||
             this.showMapEpg() ||
             this.showDetails() ||
             this.openInPlaylistName() !== null

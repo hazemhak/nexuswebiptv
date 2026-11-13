@@ -26,7 +26,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { ActivatedRoute } from '@angular/router';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { EMPTY, fromEvent, merge, of, Subscription } from 'rxjs';
 import { catchError, debounceTime, filter, switchMap } from 'rxjs/operators';
 import {
@@ -56,9 +56,12 @@ import { XtreamStore } from '@iptvnator/portal/xtream/data-access';
 import {
     EpgPreferencesService,
     EpgSourceSettingsService,
+    LazySnackBar,
     RuntimeCapabilitiesService,
     SettingsStore,
+    StreamProxyService,
 } from '@iptvnator/services';
+import { copyTextToClipboard } from '@iptvnator/services/clipboard-copy';
 import {
     epgProgramProgressPercent,
     hasEpgProgramEnded,
@@ -137,6 +140,9 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
     private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly epgPreferences = inject(EpgPreferencesService);
     private readonly dialog = inject(MatDialog);
+    private readonly streamProxy = inject(StreamProxyService);
+    private readonly snackBar = inject(LazySnackBar);
+    private readonly translate = inject(TranslateService);
 
     readonly channelContextMenu = viewChild.required(
         ChannelContextMenuComponent
@@ -761,6 +767,33 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
             xtreamId,
             playlistId
         );
+    }
+
+    async copyChannelStreamUrl(channel: XtreamChannelListItem): Promise<void> {
+        try {
+            const rawUrl = this.xtreamStore.constructStreamUrl(channel);
+            if (!rawUrl) return;
+            const copyable = this.streamProxy.rewriteForExternal(rawUrl);
+            await copyTextToClipboard(copyable);
+            void this.snackBar.open(
+                this.translate.instant('PORTALS.STREAM_URL_COPIED'),
+                this.translate.instant('CLOSE'),
+                { duration: 2500 }
+            );
+        } catch {
+            void this.snackBar.open(
+                this.translate.instant('DOWNLOADS.URL_COPY_FAILED'),
+                this.translate.instant('CLOSE'),
+                { duration: 2500 }
+            );
+        }
+    }
+
+    async copyContextMenuChannelStreamUrl(): Promise<void> {
+        const channel = this.contextMenuChannel();
+        if (!channel) return;
+        this.channelContextMenu().close();
+        await this.copyChannelStreamUrl(channel);
     }
 
     private async openEpgMappingDialog(

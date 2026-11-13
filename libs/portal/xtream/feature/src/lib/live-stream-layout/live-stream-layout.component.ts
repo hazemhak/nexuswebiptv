@@ -27,7 +27,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
     MenuItemRadioCheckDirective,
     MenuItemRadioDirective,
@@ -101,11 +101,14 @@ import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import {
     EpgPreferencesService,
     DatabaseService,
+    LazySnackBar,
     ParentalLockService,
     RecordingsService,
     RuntimeCapabilitiesService,
     SettingsStore,
+    StreamProxyService,
 } from '@iptvnator/services';
+import { copyTextToClipboard } from '@iptvnator/services/clipboard-copy';
 import { LiveStreamAutoOpenStateService } from './live-stream-auto-open-state.service';
 import { createPlaybackSessionKey } from '@iptvnator/playback/util';
 import { injectXtreamRecentHistory } from '../xtream-recent-history';
@@ -183,6 +186,9 @@ export class LiveStreamLayoutComponent
     private readonly parentalLock = inject(ParentalLockService);
     private readonly databaseService = inject(DatabaseService);
     private readonly liveAutoOpenState = inject(LiveStreamAutoOpenStateService);
+    private readonly streamProxy = inject(StreamProxyService);
+    private readonly snackBar = inject(LazySnackBar);
+    private readonly translate = inject(TranslateService);
 
     readonly categories = this.xtreamStore.getCategoriesBySelectedType;
     readonly categoryItemCounts = this.xtreamStore.getCategoryItemCounts;
@@ -893,6 +899,26 @@ export class LiveStreamLayoutComponent
         );
         request.trackLaunch(launch);
         void launch;
+    }
+
+    async copyActiveStreamUrl(): Promise<void> {
+        const streamUrl = this.activeStreamUrl();
+        if (!streamUrl) return;
+        try {
+            const copyable = this.streamProxy.rewriteForExternal(streamUrl);
+            await copyTextToClipboard(copyable);
+            void this.snackBar.open(
+                this.translate.instant('PORTALS.STREAM_URL_COPIED'),
+                this.translate.instant('CLOSE'),
+                { duration: 2500 }
+            );
+        } catch {
+            void this.snackBar.open(
+                this.translate.instant('DOWNLOADS.URL_COPY_FAILED'),
+                this.translate.instant('CLOSE'),
+                { duration: 2500 }
+            );
+        }
     }
 
     private getAllLiveStreams(): XtreamLiveChannelItem[] {
