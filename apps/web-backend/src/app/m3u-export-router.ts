@@ -58,7 +58,8 @@ export function createM3uExportRouter(
         }
 
         const effectiveToken = extractRequestToken(req) || accessToken || uiPassword || null;
-        let targetId = req.params['id'] || '';
+        const rawParamId = req.params['id'];
+        let targetId = (Array.isArray(rawParamId) ? rawParamId[0] : rawParamId) || '';
 
         if (req.path.includes('/token/')) {
             const parts = req.path.split('/token/')[1]?.split('/') || [];
