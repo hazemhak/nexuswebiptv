@@ -145,6 +145,16 @@ async function streamM3uPlaylists(
             const rawUrl = (item['url'] as string) || '';
             if (!rawUrl) continue;
 
+            const isMovie =
+                rawUrl.includes('/movie/') ||
+                rawUrl.includes('/vod/') ||
+                /\.(mp4|mkv|avi)(\?|$)/i.test(rawUrl);
+            const isSeries = rawUrl.includes('/series/');
+
+            if (streamType === 'live' && (isMovie || isSeries)) continue;
+            if ((streamType === 'movie' || streamType === 'vod' || streamType === 'movies') && !isMovie) continue;
+            if ((streamType === 'series' || streamType === 'tvshows' || streamType === 'tv') && !isSeries) continue;
+
             const name = (item['name'] as string) || 'Channel';
             const tvg = (item['tvg'] as Record<string, string>) || {};
             const group = (item['group'] as Record<string, string>) || {};
@@ -158,6 +168,13 @@ async function streamM3uPlaylists(
             if (tvgName) extinfParts.push(`tvg-name="${escapeAttr(tvgName)}"`);
             if (tvgLogo) extinfParts.push(`tvg-logo="${escapeAttr(tvgLogo)}"`);
             if (groupTitle) extinfParts.push(`group-title="${escapeAttr(groupTitle)}"`);
+
+            const typeAttr = isMovie
+                ? 'tvg-type="movies" type="movies"'
+                : isSeries
+                  ? 'tvg-type="tvshows" type="tvshows"'
+                  : 'tvg-type="live"';
+            extinfParts.push(typeAttr);
 
             let streamUrl = rawUrl;
             if (useProxy) {

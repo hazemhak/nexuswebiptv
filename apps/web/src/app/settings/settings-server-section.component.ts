@@ -82,6 +82,7 @@ export class SettingsServerSectionComponent {
 
     readonly allPlaylists = signal<Playlist[]>([]);
     readonly selectedExportPlaylist = signal<string>('all');
+    readonly selectedExportType = signal<string>('all');
     readonly copiedApiUrl = signal<boolean>(false);
     readonly serverToken = signal<string>(readServerAccessToken() || '');
     readonly proxyEnabled = signal<boolean>(this.loadProxyEnabled());
@@ -91,9 +92,7 @@ export class SettingsServerSectionComponent {
         try {
             const saved = localStorage.getItem('iptvnator_stream_proxy_enabled');
             if (saved !== null) return saved === 'true';
-        } catch {
-            // Ignore storage errors
-        }
+        } catch { /* Ignore */ }
         return !!window.__IPTVNATOR_CONFIG__?.STREAM_PROXY_ENABLED;
     }
 
@@ -105,9 +104,7 @@ export class SettingsServerSectionComponent {
                 if (window.__IPTVNATOR_CONFIG__) {
                     window.__IPTVNATOR_CONFIG__.STREAM_PROXY_ENABLED = enabled;
                 }
-            } catch {
-                // Ignore storage errors
-            }
+            } catch { /* Ignore */ }
         }
     }
 
@@ -123,6 +120,10 @@ export class SettingsServerSectionComponent {
         const params: string[] = [];
         if (token) params.push(`token=${encodeURIComponent(token)}`);
         if (!this.proxyEnabled()) params.push('proxy=0');
+        const streamType = this.selectedExportType();
+        if (streamType && streamType !== 'all') {
+            params.push(`stream_type=${encodeURIComponent(streamType)}`);
+        }
         const query = params.length > 0 ? `?${params.join('&')}` : '';
         return `${origin}${path}${query}`;
     });

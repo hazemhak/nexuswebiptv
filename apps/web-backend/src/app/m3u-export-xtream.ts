@@ -104,11 +104,12 @@ async function streamMovies(
         const name = item.name || `Movie ${item.stream_id}`;
         const ext = item.container_extension || 'mp4';
         const logo = item.stream_icon || '';
-        const catName = (item.category_id && catMap.get(String(item.category_id))) || 'Movies';
+        const rawCat = (item.category_id && catMap.get(String(item.category_id))) || 'Movies';
+        const catName = formatMovieCategory(rawCat);
         const movieStreamUrl = `${cleanServer}/movie/${userEnc}/${passEnc}/${item.stream_id}.${ext}`;
         const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
         const finalUrl = useProxy ? proxied : movieStreamUrl;
-        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="movie",${name}`;
+        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="movies" type="movies",${name}`;
         res.write(`${extinf}\n${finalUrl}\n`);
     }
 }
@@ -168,7 +169,8 @@ async function streamSeries(
 
             const seriesName = series.name || `Series ${series.series_id}`;
             const logo = series.cover || '';
-            const catName = (series.category_id && catMap.get(String(series.category_id))) || seriesName;
+            const rawCat = (series.category_id && catMap.get(String(series.category_id))) || seriesName;
+            const catName = formatSeriesCategory(rawCat);
 
             for (const [seasonKey, episodes] of Object.entries(info.episodes)) {
                 if (!Array.isArray(episodes)) continue;
@@ -183,7 +185,7 @@ async function streamSeries(
                     const epUrl = `${cleanServer}/series/${userEnc}/${passEnc}/${ep.id}.${ext}`;
                     const proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(epUrl)}${tokenParam}`;
                     const finalUrl = useProxy ? proxied : epUrl;
-                    const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="series",${epTitle}`;
+                    const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}" tvg-type="tvshows" type="tvshows" tvg-serie="${escapeAttr(seriesName)}",${epTitle}`;
                     res.write(`${extinf}\n${finalUrl}\n`);
                 }
             }
@@ -247,7 +249,11 @@ function streamM3uFromUrl(
                     if (!trimmed || trimmed === '#EXTM3U') return;
 
                     if (trimmed.startsWith('#')) {
-                        res.write(trimmed + '\n');
+                        if (trimmed.startsWith('#EXTINF:') && !trimmed.includes('tvg-type=')) {
+                            res.write(trimmed.replace(/^#EXTINF:(-?\d+)/, '#EXTINF:$1 tvg-type="live"') + '\n');
+                        } else {
+                            res.write(trimmed + '\n');
+                        }
                     } else {
                         streamCount++;
                         let fullUrl = trimmed;
@@ -342,4 +348,22 @@ function fetchXtreamJson<T>(targetUrl: string, hopCount = 0): Promise<T | null> 
 
 function escapeAttr(val: string): string {
     return val.replace(/"/g, "'");
+}
+
+function formatMovieCategory(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) return 'Movies';
+    if (/^(movies?|vod|films?)\b/i.test(trimmed) || /\b(movies?|vod|films?)$/i.test(trimmed)) {
+        return trimmed;
+    }
+    return `Movies - ${trimmed}`;
+}
+
+function formatSeriesCategory(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) return 'Series';
+    if (/^(series|tv shows?|shows?|serials?)\b/i.test(trimmed) || /\b(series|tv shows?|shows?|serials?)$/i.test(trimmed)) {
+        return trimmed;
+    }
+    return `Series - ${trimmed}`;
 }

@@ -294,6 +294,20 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline">
+            <mat-label>Content Type</mat-label>
+            <mat-select
+                [value]="selectedExportType()"
+                (selectionChange)="selectedExportType.set($event.value)"
+            >
+                <mat-option value="all">All Content (Live, Movies &amp; Series)</mat-option>
+                <mat-option value="live">Live Channels Only</mat-option>
+                <mat-option value="movie">Movies (VOD) Only</mat-option>
+                <mat-option value="series">TV Series Only</mat-option>
+            </mat-select>
+            <mat-hint>Choose what type of content to export</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
             <mat-label>Access Token (Password)</mat-label>
             <input
                 matInput

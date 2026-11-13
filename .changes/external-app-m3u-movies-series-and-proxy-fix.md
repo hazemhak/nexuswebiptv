@@ -1,6 +1,6 @@
 ---
 type: fix
-area: settings
+area: server
 ---
 
-Add stream proxy toggle to settings to enable or disable proxying for in-app playback and external M3U exports.
+Separate movies and series from live channels in external M3U exports using dedicated group namespaces, standard tvg-type and type attributes, and content-type filtering in settings.
