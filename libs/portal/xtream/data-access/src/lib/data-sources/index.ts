@@ -12,6 +12,7 @@ import {
 
 // Re-export all types and interfaces
 export * from './xtream-data-source.interface';
+export * from './pwa-catalog-storage';
 export { ElectronXtreamDataSource } from './electron-xtream-data-source';
 export { PwaXtreamDataSource } from './pwa-xtream-data-source';
 

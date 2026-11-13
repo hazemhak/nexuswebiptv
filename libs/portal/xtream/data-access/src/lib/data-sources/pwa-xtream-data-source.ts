@@ -51,6 +51,11 @@ import {
 import { PwaCollectionStorage } from './pwa-collection-storage';
 import { PwaCollectionCatalog } from './pwa-collection-catalog';
 import type { XtreamCachedContentItem } from './pwa-cached-content';
+import {
+    clearPwaCatalogCache,
+    getPwaCatalogCache,
+    setPwaCatalogCache,
+} from './pwa-catalog-storage';
 
 /**
  * Storage keys for PWA persistence
@@ -320,8 +325,17 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
         playlistId: string,
         type: DbCategoryType
     ): Promise<boolean> {
-        const cacheKey = `${playlistId}-${type}-categories`;
-        return this.categoryCache.has(cacheKey);
+        const categoryType: CategoryType = type === 'movies' ? 'vod' : type;
+        const cacheKey = `${playlistId}-${categoryType}-categories`;
+        if (this.categoryCache.has(cacheKey)) {
+            return true;
+        }
+        const cached = await getPwaCatalogCache<XtreamCategory[]>(cacheKey);
+        if (cached && cached.items?.length > 0) {
+            this.categoryCache.set(cacheKey, cached.items);
+            return true;
+        }
+        return false;
     }
 
     async getCategories(
@@ -334,7 +348,14 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
         const cacheKey = `${playlistId}-${type}-categories`;
 
         // Check in-memory cache first
-        const cachedCategories = this.categoryCache.get(cacheKey);
+        let cachedCategories = this.categoryCache.get(cacheKey);
+        if (!cachedCategories && !options?.sessionId) {
+            const cached = await getPwaCatalogCache<XtreamCategory[]>(cacheKey);
+            if (cached && cached.items?.length > 0) {
+                cachedCategories = cached.items;
+                this.categoryCache.set(cacheKey, cachedCategories);
+            }
+        }
         if (cachedCategories) {
             return this.withoutLockedCategories(
                 playlistId,
@@ -352,8 +373,9 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
         );
         options?.signal?.throwIfAborted();
 
-        // Cache in memory
+        // Cache in memory and persistent storage
         this.categoryCache.set(cacheKey, categories);
+        void setPwaCatalogCache(cacheKey, categories);
 
         return this.withoutLockedCategories(playlistId, type, categories);
     }
@@ -482,7 +504,15 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
         type: 'live' | 'movie' | 'series'
     ): Promise<boolean> {
         const cacheKey = `${playlistId}-${type}-content`;
-        return this.contentCache.has(cacheKey);
+        if (this.contentCache.has(cacheKey)) {
+            return true;
+        }
+        const cached = await getPwaCatalogCache<XtreamCachedContentItem[]>(cacheKey);
+        if (cached && cached.items?.length > 0) {
+            this.contentCache.set(cacheKey, cached.items);
+            return true;
+        }
+        return false;
     }
 
     async getContent(
@@ -501,8 +531,22 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
         const cacheKey = `${playlistId}-${type}-content`;
 
         // Check in-memory cache first
-        const cachedContent = this.contentCache.get(cacheKey);
+        let cachedContent = this.contentCache.get(cacheKey);
+        if (!cachedContent && !options?.sessionId) {
+            const cached = await getPwaCatalogCache<XtreamCachedContentItem[]>(cacheKey);
+            if (cached && cached.items?.length > 0) {
+                cachedContent = cached.items;
+                this.contentCache.set(cacheKey, cachedContent);
+                options?.onPhaseChange?.('loading-cached');
+            }
+        }
         if (cachedContent) {
+            if (onTotal) {
+                onTotal(cachedContent.length);
+            }
+            if (onProgress) {
+                onProgress(cachedContent.length);
+            }
             return this.withoutLockedContent(
                 playlistId,
                 type,
@@ -539,8 +583,9 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
             onProgress(content.length);
         }
 
-        // Cache in memory
+        // Cache in memory and persistent storage
         this.contentCache.set(cacheKey, content);
+        void setPwaCatalogCache(cacheKey, content);
 
         return this.withoutLockedContent(playlistId, type, content);
     }
@@ -549,9 +594,22 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
         playlistId: string,
         type: StreamType
     ): Promise<XtreamContentItem[]> {
-        void playlistId;
-        void type;
-        return [];
+        const cacheKey = `${playlistId}-${type}-content`;
+        let cached = this.contentCache.get(cacheKey);
+        if (!cached) {
+            const record = await getPwaCatalogCache<XtreamCachedContentItem[]>(cacheKey);
+            if (record && record.items?.length > 0) {
+                cached = record.items;
+                this.contentCache.set(cacheKey, cached);
+            }
+        }
+        return cached
+            ? (this.withoutLockedContent(
+                  playlistId,
+                  type,
+                  cached
+              ) as unknown as XtreamContentItem[])
+            : [];
     }
 
     private async normalizeContentItems(
@@ -1203,6 +1261,7 @@ export class PwaXtreamDataSource implements IXtreamDataSource {
             }
         });
         contentKeysToDelete.forEach((key) => this.contentCache.delete(key));
+        void clearPwaCatalogCache(playlistId);
     }
 }
 

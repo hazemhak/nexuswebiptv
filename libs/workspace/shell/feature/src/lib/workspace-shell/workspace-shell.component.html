@@ -39,6 +39,8 @@
         [searchScopeLabel]="facade.searchScopeLabel()"
         [searchStatusLabel]="facade.searchStatusLabel()"
         [canClearCategoryScope]="facade.canClearCategoryScope()"
+        [canRefreshPlaylist]="facade.canRefreshPlaylist()"
+        [isRefreshingPlaylist]="facade.isRefreshingPlaylist()"
         [headerShortcut]="facade.headerShortcut()"
         [headerSidebarToggle]="facade.headerSidebarToggle()"
         [isElectron]="facade.isElectron"
@@ -64,6 +66,7 @@
         (parentalLockToggleRequested)="facade.toggleParentalLock()"
         (downloadsRequested)="facade.openDownloadsShortcut()"
         (accountInfoForPlaylistRequested)="facade.openAccountInfoFor($event)"
+        (refreshPlaylistRequested)="facade.refreshCurrentPlaylist()"
     />
 
     <!-- The content frame slides to make room for the context panel

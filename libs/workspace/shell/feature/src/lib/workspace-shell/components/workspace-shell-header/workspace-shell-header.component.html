@@ -225,6 +225,20 @@
                     <mat-icon>{{ action.icon }}</mat-icon>
                 </button>
             }
+            @if (canRefreshPlaylist()) {
+                <button
+                    type="button"
+                    class="header-shortcut header-sync-button"
+                    mat-icon-button
+                    data-test-id="header-refresh-playlist"
+                    [disabled]="isRefreshingPlaylist()"
+                    (click)="onRefreshPlaylistRequested()"
+                    [matTooltip]="'WORKSPACE.SHELL.REFRESH_PLAYLIST' | translate"
+                    [attr.aria-label]="'WORKSPACE.SHELL.REFRESH_PLAYLIST' | translate"
+                >
+                    <mat-icon [class.spin-sync]="isRefreshingPlaylist()">sync</mat-icon>
+                </button>
+            }
         }
     </div>
 

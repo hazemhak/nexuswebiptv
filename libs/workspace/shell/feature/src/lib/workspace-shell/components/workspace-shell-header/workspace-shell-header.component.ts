@@ -58,6 +58,8 @@ export class WorkspaceShellHeaderComponent {
     readonly searchScopeLabel = input('');
     readonly searchStatusLabel = input('');
     readonly canClearCategoryScope = input(false);
+    readonly canRefreshPlaylist = input(false);
+    readonly isRefreshingPlaylist = input(false);
     readonly headerShortcut = input<WorkspaceHeaderAction | null>(null);
     readonly headerSidebarToggle = input<WorkspaceHeaderSidebarToggle | null>(
         null
@@ -145,6 +147,7 @@ export class WorkspaceShellHeaderComponent {
     readonly contextDrawerToggleRequested = output<void>();
     readonly accountInfoForPlaylistRequested = output<PlaylistMeta>();
     readonly clearCategoryScopeRequested = output<void>();
+    readonly refreshPlaylistRequested = output<void>();
 
     onClearCategoryScope(event: MouseEvent): void {
         event.preventDefault();
@@ -203,6 +206,10 @@ export class WorkspaceShellHeaderComponent {
 
     onAccountInfoForPlaylistRequested(playlist: PlaylistMeta): void {
         this.accountInfoForPlaylistRequested.emit(playlist);
+    }
+
+    onRefreshPlaylistRequested(): void {
+        this.refreshPlaylistRequested.emit();
     }
 
     onAddPlaylistRequested(): void {

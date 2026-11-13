@@ -146,6 +146,7 @@ export class WorkspaceShellFacade {
     readonly canOpenPlaylistInfo = this.header.canOpenPlaylistInfo;
     readonly canOpenAccountInfo = this.header.canOpenAccountInfo;
     readonly canRefreshPlaylist = this.header.canRefreshPlaylist;
+    readonly isRefreshingPlaylist = this.header.isRefreshingPlaylist;
     readonly headerSidebarToggle = this.header.headerSidebarToggle;
     readonly playlistSubtitle = this.header.playlistSubtitle;
     readonly activeDownloadsCount = computed(() =>

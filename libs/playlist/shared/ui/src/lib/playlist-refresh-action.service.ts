@@ -1,4 +1,4 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, Injector, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -49,6 +49,7 @@ export class PlaylistRefreshActionService {
     private readonly settingsStore = inject(SettingsStore);
     private readonly playlistContext = inject(PlaylistContextFacade);
     private readonly xtreamRefreshFlow = inject(XtreamRefreshFlowService);
+    private readonly injector = inject(Injector);
 
     private readonly refreshPreparationState =
         signal<XtreamRefreshPreparationState | null>(null);
@@ -75,7 +76,7 @@ export class PlaylistRefreshActionService {
         }
 
         if (playlist.serverUrl) {
-            return this.runtime.supportsXtreamSqliteDataSource;
+            return true;
         }
 
         if (playlist.url) {
@@ -92,8 +93,12 @@ export class PlaylistRefreshActionService {
             return;
         }
 
-        if (playlist.serverUrl && this.runtime.supportsXtreamSqliteDataSource) {
-            this.refreshXtream(playlist);
+        if (playlist.serverUrl) {
+            if (this.runtime.supportsXtreamSqliteDataSource) {
+                this.refreshXtream(playlist);
+            } else {
+                void this.refreshXtreamPwa(playlist);
+            }
         } else if (
             this.runtime.supportsPlaylistRefresh &&
             (playlist.url || playlist.filePath)
@@ -101,6 +106,43 @@ export class PlaylistRefreshActionService {
             void this.refreshM3u(playlist);
         } else if (playlist.url) {
             void this.refreshViaBackend(playlist, playlist.url);
+        }
+    }
+
+    private async refreshXtreamPwa(item: PlaylistMeta): Promise<void> {
+        this.isRefreshing.set(true);
+        const release = this.activity.begin([item._id]);
+        try {
+            const { clearPwaCatalogCache } = await import(
+                '@iptvnator/portal/xtream/data-access'
+            );
+            await clearPwaCatalogCache(item._id);
+
+            const { XtreamStore } = await import(
+                '@iptvnator/portal/xtream/data-access'
+            );
+            const xtreamStore = this.injector.get(XtreamStore);
+            if (xtreamStore.playlistId() === item._id) {
+                await xtreamStore.retryContentInitialization();
+            }
+
+            this.snackBar.open(
+                this.translate.instant(
+                    'HOME.PLAYLISTS.PLAYLIST_UPDATE_SUCCESS'
+                ),
+                undefined,
+                { duration: 2000 }
+            );
+        } catch (error) {
+            console.error('Error refreshing Xtream playlist in PWA:', error);
+            this.snackBar.open(
+                this.translate.instant('HOME.PLAYLISTS.PLAYLIST_UPDATE_ERROR'),
+                undefined,
+                { duration: 2000 }
+            );
+        } finally {
+            this.isRefreshing.set(false);
+            release();
         }
     }
 

@@ -497,3 +497,18 @@
     background: var(--app-selection-surface);
     color: var(--app-selection-color);
 }
+
+.header-sync-button {
+    .spin-sync {
+        animation: spin-sync-anim 1s linear infinite;
+    }
+}
+
+@keyframes spin-sync-anim {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
