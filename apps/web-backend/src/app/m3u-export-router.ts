@@ -10,7 +10,7 @@
  *   1. GET /m3u/:id
  *      Exports a specific playlist by ID as a standard Extended M3U (#EXTM3U).
  *      Query params:
- *        - token=<string>  (optional/required if IPTVNATOR_ACCESS_TOKEN is set)
+ *        - token=<string>  (optional/required if IPTVNATOR_ACCESS_TOKEN or UI password is set)
  *
  *   2. GET /m3u
  *      Exports all stored playlists merged into a single M3U playlist.
@@ -20,11 +20,9 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
-import * as readline from 'node:readline';
 import type { ServerStorage } from './storage/server-storage';
 import { legacySourceDocument } from './storage/legacy-source-document';
+import { streamXtreamM3u } from './m3u-export-xtream';
 
 export function createM3uExportRouter(
     storage: ServerStorage | null,
@@ -33,7 +31,7 @@ export function createM3uExportRouter(
 ): Router {
     const router = Router();
 
-    // Middleware to validate accessToken if set via query param or Authorization header
+    // Middleware to validate token if set via query param or Authorization header
     const checkAuth = (req: Request, res: Response, next: () => void) => {
         if (!accessToken && !uiPassword) {
             return next();
@@ -58,6 +56,8 @@ export function createM3uExportRouter(
             return;
         }
 
+        const effectiveToken = extractRequestToken(req) || accessToken || uiPassword || null;
+
         const rawId = req.params['id'];
         if (rawId) {
             const playlistId = (Array.isArray(rawId) ? rawId[0] : rawId).replace(/\.m3u8?$/i, '');
@@ -73,7 +73,7 @@ export function createM3uExportRouter(
             res.setHeader('Content-Type', 'audio/x-mpegurl; charset=utf-8');
             res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(title)}.m3u"`);
 
-            await streamM3uPlaylists([legacy], req, res, accessToken);
+            await streamM3uPlaylists([legacy], req, res, effectiveToken);
             return;
         }
 
@@ -84,7 +84,7 @@ export function createM3uExportRouter(
         res.setHeader('Content-Type', 'audio/x-mpegurl; charset=utf-8');
         res.setHeader('Content-Disposition', 'inline; filename="iptvnator-all.m3u"');
 
-        await streamM3uPlaylists(allPlaylists, req, res, accessToken);
+        await streamM3uPlaylists(allPlaylists, req, res, effectiveToken);
     };
 
     router.get('/m3u/:id', checkAuth, exportHandler);
@@ -114,12 +114,22 @@ async function streamM3uPlaylists(
             const outputFormat =
                 typeof req.query['output'] === 'string' && req.query['output'].trim()
                     ? req.query['output'].trim()
-                    : 'ts';
-            let xtreamUrl = `${serverUrl}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=${encodeURIComponent(outputFormat)}`;
-            if (typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()) {
-                xtreamUrl += `&stream_type=${encodeURIComponent(req.query['stream_type'].trim())}`;
-            }
-            await streamXtreamM3u(xtreamUrl, proxyBase, serverToken, res);
+                    : '';
+            const streamType =
+                typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()
+                    ? req.query['stream_type'].trim()
+                    : '';
+
+            await streamXtreamM3u(
+                serverUrl,
+                username,
+                password,
+                outputFormat,
+                streamType,
+                proxyBase,
+                serverToken,
+                res
+            );
             continue;
         }
 
@@ -158,79 +168,15 @@ async function streamM3uPlaylists(
     res.end();
 }
 
-function streamXtreamM3u(
-    targetUrl: string,
-    proxyBase: string,
-    serverToken: string | null,
-    res: Response,
-    hopCount = 0
-): Promise<void> {
-    if (hopCount > 5) return Promise.resolve();
-
-    return new Promise((resolve) => {
-        let parsed: URL;
-        try {
-            parsed = new URL(targetUrl);
-        } catch {
-            return resolve();
-        }
-
-        const makeRequest = parsed.protocol === 'https:' ? httpsRequest : httpRequest;
-        const req = makeRequest(
-            targetUrl,
-            {
-                headers: {
-                    'User-Agent': 'IPTVSmarters/2.2.2.1',
-                    Accept: '*/*',
-                },
-                timeout: 30000,
-            },
-            (upstream) => {
-                const status = upstream.statusCode ?? 200;
-                if (status >= 300 && status < 400 && upstream.headers.location) {
-                    upstream.resume();
-                    const redirectUrl = new URL(upstream.headers.location, targetUrl).href;
-                    return resolve(streamXtreamM3u(redirectUrl, proxyBase, serverToken, res, hopCount + 1));
-                }
-
-                if (status !== 200) {
-                    upstream.resume();
-                    return resolve();
-                }
-
-                const rl = readline.createInterface({ input: upstream, crlfDelay: Infinity });
-                rl.on('line', (line) => {
-                    const trimmed = line.trim();
-                    if (!trimmed || trimmed === '#EXTM3U') return;
-
-                    if (trimmed.startsWith('#')) {
-                        res.write(trimmed + '\n');
-                    } else if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-                        let proxied = `${proxyBase}/stream-proxy?url=${encodeURIComponent(trimmed)}`;
-                        if (serverToken) {
-                            proxied += `&token=${encodeURIComponent(serverToken)}`;
-                        }
-                        res.write(proxied + '\n');
-                    }
-                });
-
-                rl.on('close', resolve);
-                upstream.on('error', resolve);
-            }
-        );
-
-        req.on('error', resolve);
-        req.on('timeout', () => {
-            req.destroy();
-            resolve();
-        });
-        req.end();
-    });
-}
-
 function getProxyBaseUrl(req: Request): string {
-    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.headers['x-forwarded-host'] || req.headers['host'] || 'localhost';
+    const rawProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const protoStr = Array.isArray(rawProto) ? rawProto[0] : String(rawProto);
+    const proto = protoStr.split(',')[0].trim() || 'http';
+
+    const rawHost = req.headers['x-forwarded-host'] || req.headers['host'] || 'localhost';
+    const hostStr = Array.isArray(rawHost) ? rawHost[0] : String(rawHost);
+    const host = hostStr.split(',')[0].trim() || 'localhost';
+
     return `${proto}://${host}/api`;
 }
 

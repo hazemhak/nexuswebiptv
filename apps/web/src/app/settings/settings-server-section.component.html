@@ -286,7 +286,7 @@
                 </mat-option>
                 @for (pl of allPlaylists(); track pl._id) {
                     <mat-option [value]="pl._id">
-                        {{ pl.title || 'Untitled Playlist' }} ({{ pl.count || 0 }} channels)
+                        {{ getPlaylistLabel(pl) }}
                     </mat-option>
                 }
             </mat-select>

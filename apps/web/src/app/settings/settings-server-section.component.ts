@@ -110,6 +110,14 @@ export class SettingsServerSectionComponent {
         });
     }
 
+    getPlaylistLabel(pl: Playlist): string {
+        const title = pl.title || pl.filename || 'Untitled Playlist';
+        if (pl.serverUrl) return `${title} (Xtream)`;
+        if (pl.macAddress) return `${title} (Stalker)`;
+        if (typeof pl.count === 'number' && pl.count > 0) return `${title} (${pl.count} channels)`;
+        return title;
+    }
+
     async copyExportUrl(): Promise<void> {
         const url = this.exportedApiUrl();
         if (!url) return;
