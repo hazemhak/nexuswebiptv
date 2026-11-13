@@ -40,12 +40,26 @@ export function readServerAccessToken(
         const token = localStorage
             .getItem(SERVER_ACCESS_TOKEN_STORAGE_KEY)
             ?.trim();
-        return token &&
+        if (
+            token &&
             (instanceId === undefined ||
                 localStorage.getItem(SERVER_ACCESS_TOKEN_OWNER_KEY) ===
                     (instanceId ?? ''))
-            ? token
-            : null;
+        ) {
+            return token;
+        }
+
+        const configToken = (
+            globalThis as unknown as {
+                __IPTVNATOR_CONFIG__?: { ACCESS_TOKEN?: string };
+            }
+        )?.__IPTVNATOR_CONFIG__?.ACCESS_TOKEN?.trim();
+
+        if (configToken) {
+            return configToken;
+        }
+
+        return null;
     } catch {
         return null;
     }

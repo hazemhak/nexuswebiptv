@@ -22,6 +22,7 @@
  * the proxy.
  */
 import { Injectable } from '@angular/core';
+import { readServerAccessToken } from './server-access-token';
 
 @Injectable({ providedIn: 'root' })
 export class StreamProxyService {
@@ -42,11 +43,28 @@ export class StreamProxyService {
         if (this.isAlreadyProxied(streamUrl)) return streamUrl;
 
         const backendUrl = this.backendUrl();
-        const proxyUrl = `${backendUrl}/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
+        let proxyUrl = `${backendUrl}/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
         if (userAgent) {
-            return `${proxyUrl}&userAgent=${encodeURIComponent(userAgent)}`;
+            proxyUrl += `&userAgent=${encodeURIComponent(userAgent)}`;
+        }
+        const token = this.accessToken();
+        if (token) {
+            proxyUrl += `&token=${encodeURIComponent(token)}`;
         }
         return proxyUrl;
+    }
+
+    /**
+     * Returns an absolute proxy URL suitable for external players (VLC, MPV)
+     * and copying to clipboard.
+     */
+    rewriteForExternal(streamUrl: string, userAgent?: string): string {
+        if (!streamUrl) return streamUrl;
+        const proxied = this.rewrite(streamUrl, userAgent);
+        if (typeof window !== 'undefined' && proxied.startsWith('/')) {
+            return `${window.location.origin}${proxied}`;
+        }
+        return proxied;
     }
 
     /**
@@ -59,6 +77,15 @@ export class StreamProxyService {
 
     private backendUrl(): string {
         return window.__IPTVNATOR_CONFIG__?.BACKEND_URL ?? '/api';
+    }
+
+    private accessToken(): string | null {
+        return (
+            (window as unknown as { __IPTVNATOR_CONFIG__?: { ACCESS_TOKEN?: string } })
+                ?.__IPTVNATOR_CONFIG__?.ACCESS_TOKEN?.trim() ||
+            readServerAccessToken() ||
+            null
+        );
     }
 
     private isAlreadyProxied(url: string): boolean {

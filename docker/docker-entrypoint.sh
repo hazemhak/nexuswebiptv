@@ -18,6 +18,7 @@ fs.writeFileSync(
         {
             BACKEND_URL: process.env.BACKEND_URL || '/api',
             STREAM_PROXY_ENABLED: streamProxyEnabled,
+            ACCESS_TOKEN: process.env.IPTVNATOR_ACCESS_TOKEN || '',
         },
         null,
         2

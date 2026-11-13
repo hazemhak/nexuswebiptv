@@ -1,4 +1,5 @@
 import { DOCUMENT } from '@angular/common';
+import { StreamProxyService } from '@iptvnator/services';
 import { version as appVersion } from '@package';
 import { createDiagnosticReport } from './playback-diagnostic-report.util';
 import { ClipboardModule } from '@angular/cdk/clipboard';
@@ -98,6 +99,10 @@ export class PlaybackDiagnosticPanelComponent {
     }
 
     private readonly document = inject(DOCUMENT);
+    private readonly streamProxy = inject(StreamProxyService);
+    readonly copyableStreamUrl = computed(() =>
+        this.streamProxy.rewriteForExternal(this.playback().streamUrl)
+    );
     private readonly copyResult = signal<{
         issue: PlaybackDiagnostic;
         success: boolean;

@@ -51,4 +51,16 @@ describe('server access token', () => {
         }
         expect(writeServerAccessToken('s3cret', 'i-1')).toBe(true);
     });
+
+    it('falls back to window.__IPTVNATOR_CONFIG__.ACCESS_TOKEN when not stored in localStorage', () => {
+        (globalThis as unknown as { __IPTVNATOR_CONFIG__?: { ACCESS_TOKEN?: string } }).__IPTVNATOR_CONFIG__ = {
+            ACCESS_TOKEN: 'auto-token',
+        };
+        try {
+            expect(readServerAccessToken()).toBe('auto-token');
+            expect(readServerAccessToken('any-instance')).toBe('auto-token');
+        } finally {
+            delete (globalThis as unknown as { __IPTVNATOR_CONFIG__?: unknown }).__IPTVNATOR_CONFIG__;
+        }
+    });
 });

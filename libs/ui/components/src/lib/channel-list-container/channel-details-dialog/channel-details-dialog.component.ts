@@ -1,4 +1,4 @@
-import { EpgPreferencesService } from '@iptvnator/services';
+import { EpgPreferencesService, StreamProxyService } from '@iptvnator/services';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -62,7 +62,9 @@ interface HeroStat {
 })
 export class ChannelDetailsDialogComponent {
     private readonly epgPreferences = inject(EpgPreferencesService);
+    private readonly streamProxy = inject(StreamProxyService);
     readonly channel = inject<Channel>(MAT_DIALOG_DATA);
+    readonly copyableUrl = this.streamProxy.rewriteForExternal(this.channel.url);
 
     /** Opens the dialog with the size every entry point shares. */
     static open(

@@ -150,6 +150,7 @@ export function createWebBackendApp(
         const config = JSON.stringify({
             BACKEND_URL: runtimeBackendUrl,
             STREAM_PROXY_ENABLED: streamProxyEnabled,
+            ACCESS_TOKEN: options.accessToken || '',
         });
         res.type('application/javascript').send(
             `window.__IPTVNATOR_CONFIG__ = Object.assign({}, window.__IPTVNATOR_CONFIG__, ${config});\n`

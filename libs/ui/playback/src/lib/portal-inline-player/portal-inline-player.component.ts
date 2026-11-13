@@ -27,7 +27,7 @@ import {
 } from '@iptvnator/shared/interfaces';
 import type { PlaybackFallbackRequest } from '@iptvnator/playback/util';
 import type { PlaybackDiagnosticCode } from '@iptvnator/playback/util';
-import { SettingsStore } from '@iptvnator/services';
+import { SettingsStore, StreamProxyService } from '@iptvnator/services';
 import { applyChannelNameStrip } from '@iptvnator/shared/m3u-utils';
 import type { PlayerMediaTitle, PlayerUpNextItem } from '../player-controls';
 import {
@@ -139,6 +139,7 @@ export class PortalInlinePlayerComponent {
      */
     readonly playerOverride = input<VideoPlayer | null>(null);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly streamProxy = inject(StreamProxyService);
     /**
      * Title row (name, copy-URL, close) visibility: shown on pointer
      * activity over the viewport, hidden again once idle, matching standard
@@ -154,6 +155,9 @@ export class PortalInlinePlayerComponent {
         )
     );
     readonly streamUrl = computed(() => this.playback()?.streamUrl ?? '');
+    readonly copyableStreamUrl = computed(() =>
+        this.streamProxy.rewriteForExternal(this.playback()?.streamUrl ?? '')
+    );
     readonly startTime = computed(() => this.playback()?.startTime ?? 0);
     /**
      * Poster used for the "Ambient mode" fill behind the player. Live channels

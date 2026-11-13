@@ -12,7 +12,7 @@ import {
     XTREAM_DATA_SOURCE,
     XtreamStore,
 } from '@iptvnator/portal/xtream/data-access';
-import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
+import { RuntimeCapabilitiesService, SettingsStore, StreamProxyService } from '@iptvnator/services';
 import { copyTextToClipboard } from '@iptvnator/services/clipboard-copy';
 import { captureHistoryOwner } from '@iptvnator/services/history-events';
 import { sourceConnection } from '@iptvnator/services/source-sync/connection';
@@ -71,6 +71,7 @@ export class SerialDetailsMenuService {
     });
     private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly streamProxy = inject(StreamProxyService);
     private readonly router = inject(Router);
     private readonly snackBar = inject(MatSnackBar);
     private readonly translate = inject(TranslateService);
@@ -296,7 +297,9 @@ export class SerialDetailsMenuService {
             return;
         }
         try {
-            await copyTextToClipboard(playback.streamUrl);
+            await copyTextToClipboard(
+                this.streamProxy.rewriteForExternal(playback.streamUrl)
+            );
             this.notify('PORTALS.STREAM_URL_COPIED');
         } catch (error) {
             this.logger.warn('Copying the stream URL failed', error);

@@ -7,7 +7,7 @@ import {
     PORTAL_PLAYBACK_POSITIONS,
 } from '@iptvnator/portal/shared/util';
 import { XtreamStore } from '@iptvnator/portal/xtream/data-access';
-import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
+import { RuntimeCapabilitiesService, SettingsStore, StreamProxyService } from '@iptvnator/services';
 import { copyTextToClipboard } from '@iptvnator/services/clipboard-copy';
 import {
     VideoPlayer,
@@ -54,6 +54,7 @@ export class VodDetailsMenuService {
     private readonly playbackPositions = inject(PORTAL_PLAYBACK_POSITIONS);
     private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly streamProxy = inject(StreamProxyService);
     private readonly router = inject(Router);
     private readonly snackBar = inject(MatSnackBar);
     private readonly translate = inject(TranslateService);
@@ -171,8 +172,9 @@ export class VodDetailsMenuService {
             return;
         }
         try {
+            const rawUrl = this.xtreamStore.constructVodStreamUrl(item);
             await copyTextToClipboard(
-                this.xtreamStore.constructVodStreamUrl(item)
+                this.streamProxy.rewriteForExternal(rawUrl)
             );
             this.notify('PORTALS.STREAM_URL_COPIED');
         } catch (error) {

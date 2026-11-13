@@ -192,8 +192,8 @@
             <button
                 class="web-player-diagnostic__utility-button"
                 type="button"
-                [cdkCopyToClipboard]="playback().streamUrl"
-                [matTooltip]="playback().streamUrl"
+                [cdkCopyToClipboard]="copyableStreamUrl()"
+                [matTooltip]="copyableStreamUrl()"
                 data-test-id="playback-copy-url"
             >
                 <mat-icon aria-hidden="true">content_copy</mat-icon>
