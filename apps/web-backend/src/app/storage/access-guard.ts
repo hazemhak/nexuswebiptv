@@ -3,15 +3,26 @@ import type { RequestHandler } from 'express';
 import { SERVER_ACCESS_CHALLENGE } from '@iptvnator/shared/interfaces';
 
 /** Routes a browser must reach before it has a token. */
-const PUBLIC_PATHS = new Set(['/', '/health', '/config.js', '/v1/instance']);
+const PUBLIC_PATHS = new Set([
+    '/',
+    '/health',
+    '/config.js',
+    '/v1/instance',
+    '/v1/auth/login',
+]);
 
 /**
  * Optional shared-token protection for every other route, including the
  * provider proxy routes. Tokens are compared as SHA-256 digests so the
  * comparison is constant-time regardless of length.
  */
-export function createAccessGuard(token: string): RequestHandler {
-    const expected = digest(token);
+export function createAccessGuard(
+    tokens: string | readonly string[]
+): RequestHandler {
+    const list = (Array.isArray(tokens) ? tokens : [tokens]).filter(
+        Boolean
+    ) as string[];
+    const expectedDigests = list.map((t) => digest(t));
 
     return (req, res, next) => {
         if (req.method === 'OPTIONS' || PUBLIC_PATHS.has(req.path)) {
@@ -19,10 +30,16 @@ export function createAccessGuard(token: string): RequestHandler {
             return;
         }
 
-        const token = readBearerToken(req.get('authorization'));
-        if (token && timingSafeEqual(digest(token), expected)) {
-            next();
-            return;
+        const bearer = readBearerToken(req.get('authorization'));
+        if (bearer) {
+            const bearerDigest = digest(bearer);
+            const matches = expectedDigests.some((expected) =>
+                timingSafeEqual(bearerDigest, expected)
+            );
+            if (matches) {
+                next();
+                return;
+            }
         }
 
         res.status(401)

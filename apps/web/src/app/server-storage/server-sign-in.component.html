@@ -7,12 +7,22 @@
             width="40"
             height="40"
         />
-        <h1>{{ 'SERVER_STORAGE.SIGN_IN_TITLE' | translate }}</h1>
-        <p>{{ 'SERVER_STORAGE.SIGN_IN_DESCRIPTION' | translate }}</p>
+        <h1>{{
+            (isUiPassword()
+                ? 'SERVER_STORAGE.SIGN_IN_TITLE_PASSWORD'
+                : 'SERVER_STORAGE.SIGN_IN_TITLE') | translate
+        }}</h1>
+        <p>{{
+            (isUiPassword()
+                ? 'SERVER_STORAGE.SIGN_IN_DESCRIPTION_PASSWORD'
+                : 'SERVER_STORAGE.SIGN_IN_DESCRIPTION') | translate
+        }}</p>
 
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>{{
-                'SERVER_STORAGE.SIGN_IN_TOKEN_LABEL' | translate
+                (isUiPassword()
+                    ? 'SERVER_STORAGE.SIGN_IN_PASSWORD_LABEL'
+                    : 'SERVER_STORAGE.SIGN_IN_TOKEN_LABEL') | translate
             }}</mat-label>
             <input
                 matInput
@@ -32,7 +42,11 @@
             >
                 <mat-icon>{{ tokenToggle.icon() }}</mat-icon>
             </button>
-            <mat-hint>{{ 'SERVER_STORAGE.SIGN_IN_HINT' | translate }}</mat-hint>
+            <mat-hint>{{
+                (isUiPassword()
+                    ? 'SERVER_STORAGE.SIGN_IN_PASSWORD_HINT'
+                    : 'SERVER_STORAGE.SIGN_IN_HINT') | translate
+            }}</mat-hint>
         </mat-form-field>
 
         <p
@@ -42,7 +56,11 @@
         >
             @switch (feedback()) {
                 @case ('rejected') {
-                    {{ 'SERVER_STORAGE.SIGN_IN_REJECTED' | translate }}
+                    {{
+                        (isUiPassword()
+                            ? 'SERVER_STORAGE.SIGN_IN_PASSWORD_REJECTED'
+                            : 'SERVER_STORAGE.SIGN_IN_REJECTED') | translate
+                    }}
                 }
                 @case ('unreachable') {
                     {{ 'SERVER_STORAGE.SIGN_IN_UNREACHABLE' | translate }}

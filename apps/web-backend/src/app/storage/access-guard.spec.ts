@@ -74,4 +74,31 @@ describe('createAccessGuard', () => {
             expect(response.status).toBe(401);
             expect(Date.now() - started).toBeLessThan(1_000);
         }));
+
+    it('accepts any token when configured with multiple allowed tokens', () => {
+        const multiApp = express();
+        multiApp.use(createAccessGuard(['stream-token', 'ui-password']));
+        multiApp.get('/v1/playlists', (_req, res) => res.json([]));
+        multiApp.post('/v1/auth/login', (_req, res) => res.json({ ok: true }));
+
+        return withServer(multiApp, async (baseUrl) => {
+            const stream = await fetch(`${baseUrl}/v1/playlists`, {
+                headers: { authorization: 'Bearer stream-token' },
+            });
+            const ui = await fetch(`${baseUrl}/v1/playlists`, {
+                headers: { authorization: 'Bearer ui-password' },
+            });
+            const login = await fetch(`${baseUrl}/v1/auth/login`, {
+                method: 'POST',
+            });
+            const invalid = await fetch(`${baseUrl}/v1/playlists`, {
+                headers: { authorization: 'Bearer wrong' },
+            });
+
+            expect(stream.status).toBe(200);
+            expect(ui.status).toBe(200);
+            expect(login.status).toBe(200);
+            expect(invalid.status).toBe(401);
+        });
+    });
 });

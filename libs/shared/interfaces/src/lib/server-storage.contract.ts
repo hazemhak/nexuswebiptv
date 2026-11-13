@@ -35,6 +35,7 @@ export interface ServerInstanceInfo {
     readonly instanceId: string | null;
     readonly storage: 'server' | 'none';
     readonly auth: 'none' | 'token';
+    readonly uiPassword?: boolean;
 }
 
 /**

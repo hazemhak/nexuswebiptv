@@ -62,6 +62,11 @@ export class WorkspaceShellRailComponent {
 
     signOut(): void {
         clearServerAccessToken();
+        try {
+            sessionStorage.clear();
+        } catch {
+            // Storage unavailable
+        }
         this.serverStatus.reportUnauthorized();
         void this.router.navigateByUrl(SERVER_SIGN_IN_PATH);
     }

@@ -59,6 +59,7 @@ async function start(): Promise<void> {
     const app = createWebBackendApp({
         storage,
         accessToken: config.accessToken,
+        uiPassword: config.uiPassword,
         maxDocumentBytes: config.maxDocumentBytes,
     });
     if (hostedAssets) {

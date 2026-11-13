@@ -1,6 +1,7 @@
 import {
     ChangeDetectionStrategy,
     Component,
+    computed,
     inject,
     signal,
 } from '@angular/core';
@@ -47,6 +48,7 @@ export class ServerSignInComponent {
     readonly token = signal('');
     readonly busy = signal(false);
     readonly feedback = signal<ServerSignInFeedback | null>(null);
+    readonly isUiPassword = computed(() => !!this.config.instance.uiPassword);
 
     edit(value: string): void {
         this.token.set(value);
@@ -55,8 +57,8 @@ export class ServerSignInComponent {
 
     async submit(event: Event): Promise<void> {
         event.preventDefault();
-        const token = this.token().trim();
-        if (!token || this.busy()) {
+        const value = this.token().trim();
+        if (!value || this.busy()) {
             return;
         }
         this.busy.set(true);
@@ -70,13 +72,45 @@ export class ServerSignInComponent {
             this.busy.set(false);
             return;
         }
+
+        let authToken = value;
+
+        if (this.config.instance.uiPassword) {
+            try {
+                const response = await fetch(
+                    `${this.config.baseUrl}/v1/auth/login`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: value }),
+                    }
+                );
+                if (!response.ok) {
+                    this.feedback.set('rejected');
+                    this.busy.set(false);
+                    return;
+                }
+                const data = (await response.json()) as { token?: string };
+                if (data.token) {
+                    authToken = data.token;
+                }
+            } catch {
+                this.feedback.set('unreachable');
+                this.busy.set(false);
+                return;
+            }
+        }
+
         // Every request and the reload read the token from storage, and the
         // next start keeps it only for the server it remembers.
         if (
-            !writeServerAccessToken(token, this.config.instance.instanceId) ||
+            !writeServerAccessToken(
+                authToken,
+                this.config.instance.instanceId
+            ) ||
             !rememberServer(this.config.baseUrl, this.config.instance)
         ) {
-            forgetAttempt(token);
+            forgetAttempt(authToken);
             this.feedback.set('storage');
             this.busy.set(false);
             return;
@@ -90,7 +124,7 @@ export class ServerSignInComponent {
             // A refused token is no one's. A network failure says nothing
             // about it, and another tab may have stored the same one since.
             if (rejected) {
-                forgetAttempt(token);
+                forgetAttempt(authToken);
             }
             this.feedback.set(rejected ? 'rejected' : 'unreachable');
         } finally {

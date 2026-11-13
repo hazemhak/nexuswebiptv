@@ -6,6 +6,7 @@ import {
     invalidateSourceVerification,
     tokenKey,
 } from './source-connection';
+import { readServerAccessToken } from '../server-access-token';
 
 let verifiedEpoch = -1;
 let refusal:
@@ -63,7 +64,9 @@ export function sourceAuthorization(url: string): Record<string, string> {
     )
         return {};
     try {
-        const token = sessionStorage.getItem(tokenKey(sourceConnection()!));
+        const token =
+            sessionStorage.getItem(tokenKey(sourceConnection()!)) ||
+            readServerAccessToken();
         return token ? { Authorization: `Bearer ${token}` } : {};
     } catch {
         return {};

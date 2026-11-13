@@ -28,22 +28,28 @@ import { legacySourceDocument } from './storage/legacy-source-document';
 
 export function createM3uExportRouter(
     storage: ServerStorage | null,
-    accessToken: string | null
+    accessToken: string | null,
+    uiPassword?: string | null
 ): Router {
     const router = Router();
 
     // Middleware to validate accessToken if set via query param or Authorization header
     const checkAuth = (req: Request, res: Response, next: () => void) => {
-        if (!accessToken) {
+        if (!accessToken && !uiPassword) {
             return next();
         }
 
         const providedToken = extractRequestToken(req);
-        if (providedToken === accessToken) {
+        if (
+            (accessToken && providedToken === accessToken) ||
+            (uiPassword && providedToken === uiPassword)
+        ) {
             return next();
         }
 
-        res.status(401).send('#EXTM3U\n# Unauthorized: Invalid or missing access token\n');
+        res.status(401).send(
+            '#EXTM3U\n# Unauthorized: Invalid or missing access token\n'
+        );
     };
 
     const exportHandler = async (req: Request, res: Response) => {

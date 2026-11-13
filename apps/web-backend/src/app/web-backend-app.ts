@@ -82,6 +82,8 @@ export interface WebBackendAppOptions {
     readonly runtimeBackendUrl?: string;
     /** Optional bearer token for every non-public route. */
     readonly accessToken?: string | null;
+    /** Optional web UI password to protect the web interface. */
+    readonly uiPassword?: string | null;
     /** Largest accepted playlist document in bytes. */
     readonly maxDocumentBytes?: number;
     readonly maxProviderResponseBytes?: number;
@@ -147,10 +149,12 @@ export function createWebBackendApp(
 
     app.get('/config.js', corsMiddleware, (_req, res) => {
         const streamProxyEnabled = isStreamProxyEnabled();
+        const uiPassword = options.uiPassword;
+        const accessToken = uiPassword ? '' : (options.accessToken || '');
         const config = JSON.stringify({
             BACKEND_URL: runtimeBackendUrl,
             STREAM_PROXY_ENABLED: streamProxyEnabled,
-            ACCESS_TOKEN: options.accessToken || '',
+            ACCESS_TOKEN: accessToken,
         });
         res.type('application/javascript').send(
             `window.__IPTVNATOR_CONFIG__ = Object.assign({}, window.__IPTVNATOR_CONFIG__, ${config});\n`
@@ -168,12 +172,20 @@ export function createWebBackendApp(
     // M3U export: allows external players (TiviMate, VLC, Kodi) to pull
     // playlists with all streams rewritten through the server proxy.
     // Endpoints: GET /m3u, GET /m3u/:id
-    app.use(corsMiddleware, createM3uExportRouter(options.storage ?? null, options.accessToken ?? null));
+    app.use(
+        corsMiddleware,
+        createM3uExportRouter(
+            options.storage ?? null,
+            options.accessToken ?? null,
+            options.uiPassword ?? null
+        )
+    );
 
     mountServerStorage(app, {
         corsMiddleware,
         storage: options.storage ?? null,
         accessToken: options.accessToken ?? null,
+        uiPassword: options.uiPassword ?? null,
         maxDocumentBytes:
             options.maxDocumentBytes ?? DEFAULT_MAX_DOCUMENT_BYTES,
     });

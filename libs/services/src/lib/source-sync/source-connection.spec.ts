@@ -225,6 +225,19 @@ describe('source server selection and authorization', () => {
         expect(sourceAuthorization('https://nas.test/v1/sources')).toEqual({
             Authorization: 'Bearer root-token',
         });
+        sessionStorage.clear();
+        (
+            globalThis as unknown as {
+                __IPTVNATOR_CONFIG__?: { ACCESS_TOKEN?: string };
+            }
+        ).__IPTVNATOR_CONFIG__ = {
+            ACCESS_TOKEN: 'fallback-token',
+        };
+        expect(sourceAuthorization('https://nas.test/v1/sources')).toEqual({
+            Authorization: 'Bearer fallback-token',
+        });
+        delete (globalThis as unknown as { __IPTVNATOR_CONFIG__?: unknown })
+            .__IPTVNATOR_CONFIG__;
         localStorage.clear();
         globalThis.fetch = jest.fn(async () => ({
             ok: true,

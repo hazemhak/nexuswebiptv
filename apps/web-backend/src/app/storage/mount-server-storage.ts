@@ -17,6 +17,7 @@ export interface ServerStorageMountOptions {
     readonly corsMiddleware: RequestHandler;
     readonly storage: ServerStorage | null;
     readonly accessToken: string | null;
+    readonly uiPassword?: string | null;
     readonly maxDocumentBytes: number;
 }
 
@@ -31,9 +32,12 @@ export function mountServerStorage(
     options: ServerStorageMountOptions
 ): void {
     app.use('/v1', options.corsMiddleware);
-    if (options.accessToken) {
+    const tokens = [options.accessToken, options.uiPassword].filter(
+        Boolean
+    ) as string[];
+    if (tokens.length > 0) {
         app.use(options.corsMiddleware);
-        app.use(createAccessGuard(options.accessToken));
+        app.use(createAccessGuard(tokens));
     }
 
     app.use(
@@ -41,6 +45,8 @@ export function mountServerStorage(
         createInstanceRouter({
             storage: options.storage,
             accessTokenRequired: !!options.accessToken,
+            uiPassword: options.uiPassword ?? null,
+            accessToken: options.accessToken ?? null,
         })
     );
     if (options.storage) {

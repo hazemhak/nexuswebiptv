@@ -199,4 +199,61 @@ describe('ServerSignInComponent', () => {
         expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
         expect(feedbackText()).toBe('SERVER_STORAGE.SIGN_IN_UNREACHABLE');
     });
+
+    it('authenticates with UI password via /v1/auth/login and stores returned token', async () => {
+        TestBed.resetTestingModule();
+        await TestBed.configureTestingModule({
+            imports: [ServerSignInComponent, TranslateModule.forRoot()],
+            providers: [
+                { provide: ServerStorageSession, useValue: session },
+                {
+                    provide: SERVER_STORAGE_CONFIG,
+                    useValue: {
+                        baseUrl: '/api',
+                        instance: {
+                            service: 'iptvnator',
+                            apiVersion: 1,
+                            instanceId: 'i-1',
+                            storage: 'server',
+                            auth: 'token',
+                            uiPassword: true,
+                        },
+                    },
+                },
+            ],
+        }).compileComponents();
+        const uiFixture = TestBed.createComponent(ServerSignInComponent);
+        const uiComp = uiFixture.componentInstance;
+        uiFixture.detectChanges();
+
+        session.fetchStatus.mockResolvedValue({ playlists: 0 });
+        const open = jest
+            .spyOn(uiComp, 'openWorkspace')
+            .mockImplementation(() => undefined);
+
+        const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+            new Response(
+                JSON.stringify({ ok: true, token: 'returned-stream-token' }),
+                {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                }
+            )
+        );
+
+        uiComp.edit('my-ui-password');
+        await uiComp.submit(new Event('submit'));
+
+        expect(fetchSpy).toHaveBeenCalledWith(
+            '/api/v1/auth/login',
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ password: 'my-ui-password' }),
+            })
+        );
+        expect(localStorage.getItem(TOKEN_KEY)).toBe('returned-stream-token');
+        expect(readServerAccessToken('i-1')).toBe('returned-stream-token');
+        expect(open).toHaveBeenCalled();
+        fetchSpy.mockRestore();
+    });
 });

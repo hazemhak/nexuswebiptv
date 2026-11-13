@@ -10,6 +10,7 @@ import {
     tokenKey,
     markSourceConnectionReadFailed,
 } from './source-connection';
+import { readServerAccessToken } from '../server-access-token';
 
 function readDisconnectedSelection(): SourceServerConnection | null {
     if (localStorage.getItem(CONNECTION_KEY)) return null;
@@ -28,7 +29,10 @@ export function readSavedBrowserSourceConnection(): SavedSourceServerConnection 
         if (!saved) return null;
         let hasToken = false;
         try {
-            hasToken = Boolean(sessionStorage.getItem(tokenKey(saved)));
+            hasToken = Boolean(
+                sessionStorage.getItem(tokenKey(saved)) ||
+                readServerAccessToken()
+            );
         } catch {
             /* The address is still available when tab storage is denied. */
         }
@@ -60,7 +64,11 @@ function savedBrowserSourceToken(connection: SourceServerConnection): string {
         saved.instanceId !== connection.instanceId
     )
         throw new Error('SOURCE_SYNC.SAVED_INSTANCE_CHANGED');
-    return sessionStorage.getItem(tokenKey(saved)) ?? '';
+    return (
+        sessionStorage.getItem(tokenKey(saved)) ??
+        readServerAccessToken() ??
+        ''
+    );
 }
 
 export function saveBrowserSourceConnection(

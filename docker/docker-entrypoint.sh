@@ -11,6 +11,12 @@ const fs = require('node:fs');
 
 const streamProxy = process.env.IPTVNATOR_STREAM_PROXY;
 const streamProxyEnabled = streamProxy === undefined ? true : (streamProxy === '1' || streamProxy === 'true');
+const uiPassword =
+    process.env.IPTVNATOR_UI_PASSWORD ||
+    process.env.IPTVNATOR_WEB_PASSWORD ||
+    process.env.UI_PASSWORD ||
+    '';
+const accessToken = uiPassword ? '' : (process.env.IPTVNATOR_ACCESS_TOKEN || '');
 
 fs.writeFileSync(
     '/usr/share/nginx/html/assets/app-config.js',
@@ -18,7 +24,7 @@ fs.writeFileSync(
         {
             BACKEND_URL: process.env.BACKEND_URL || '/api',
             STREAM_PROXY_ENABLED: streamProxyEnabled,
-            ACCESS_TOKEN: process.env.IPTVNATOR_ACCESS_TOKEN || '',
+            ACCESS_TOKEN: accessToken,
         },
         null,
         2
