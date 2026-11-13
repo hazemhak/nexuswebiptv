@@ -105,6 +105,14 @@ async function streamM3uPlaylists(
     const proxyBase = getProxyBaseUrl(req);
     const proxyQuery = typeof req.query['proxy'] === 'string' ? req.query['proxy'].trim().toLowerCase() : '';
     const useProxy = proxyQuery !== '0' && proxyQuery !== 'false' && proxyQuery !== 'no';
+    const outputFormat =
+        typeof req.query['output'] === 'string' && req.query['output'].trim()
+            ? req.query['output'].trim()
+            : '';
+    const streamType =
+        typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()
+            ? req.query['stream_type'].trim()
+            : '';
     res.write('#EXTM3U\n');
 
     for (const p of playlists) {
@@ -113,14 +121,6 @@ async function streamM3uPlaylists(
             const serverUrl = String(p['serverUrl']).replace(/\/+$/, '');
             const username = String(p['username']);
             const password = String(p['password']);
-            const outputFormat =
-                typeof req.query['output'] === 'string' && req.query['output'].trim()
-                    ? req.query['output'].trim()
-                    : '';
-            const streamType =
-                typeof req.query['stream_type'] === 'string' && req.query['stream_type'].trim()
-                    ? req.query['stream_type'].trim()
-                    : '';
 
             await streamXtreamM3u(
                 serverUrl,
