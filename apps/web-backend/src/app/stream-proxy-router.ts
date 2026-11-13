@@ -70,7 +70,7 @@ export function mountStreamProxy(
     router: IRouter,
     policy: ProviderUrlPolicy
 ): void {
-    const proxyRoute = /^\/(?:api\/)?stream-proxy(?:\/.*)?$/;
+    const proxyRoute = /^\/(?:api\/)?(?:stream-proxy|live|movie|series)(?:\/.*)?$/;
     router.get(proxyRoute, (req: Request, res: Response) => {
         void handleStreamProxy(req, res, policy);
     });
@@ -182,13 +182,14 @@ async function proxyStream(options: ProxyStreamOptions): Promise<void> {
     }
 
     const upstream = await new Promise<IncomingMessage>((resolve, reject) => {
-        const requestOptions: RequestOptions = {
+        const requestOptions: RequestOptions & { rejectUnauthorized?: boolean } = {
             hostname,
             port,
             path,
             method: 'GET',
             headers: reqHeaders,
             timeout: STREAM_PROXY_TIMEOUT_MS,
+            rejectUnauthorized: false,
         };
 
         const makeRequest = secure ? httpsRequest : httpRequest;
@@ -289,7 +290,7 @@ async function rewriteAndSendM3u8(
         body += chunk.toString('utf8');
     }
 
-    const proxyBase = buildProxyBase(req);
+    const proxyBase = buildProxyBase();
     const token = typeof req.query['token'] === 'string' ? req.query['token'] : '';
     const userAgent = typeof req.query['userAgent'] === 'string' ? req.query['userAgent'] : '';
     const extraParams =
@@ -349,7 +350,7 @@ function selectDefaultUserAgent(headerVal: unknown): string {
     return 'IPTVSmarters/2.2.2.1';
 }
 
-function buildProxyBase(_req: Request): string {
+function buildProxyBase(): string {
     // Return root-relative '/api' path so segment requests are resolved against
     // the client's current browser origin, host, and port directly without
     // depending on reverse-proxy header rewrites.

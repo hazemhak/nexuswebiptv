@@ -124,7 +124,15 @@ export class SettingsServerSectionComponent {
         if (target && target !== 'all') path += `/${encodeURIComponent(target)}`;
         if (streamType && streamType !== 'all') path += `/type/${encodeURIComponent(streamType)}`;
         if (!proxy) path += '/direct';
-        return `${origin}${path}/playlist.m3u`;
+        const file =
+            streamType === 'live'
+                ? 'live.m3u'
+                : streamType === 'movie' || streamType === 'movies'
+                ? 'movies.m3u'
+                : streamType === 'series'
+                ? 'series.m3u'
+                : 'playlist.m3u';
+        return `${origin}${path}/${file}`;
     });
 
     constructor() {

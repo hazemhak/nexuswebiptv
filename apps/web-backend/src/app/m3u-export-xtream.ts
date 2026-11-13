@@ -3,22 +3,28 @@ import { request as httpsRequest } from 'node:https';
 import * as readline from 'node:readline';
 import type { Response } from 'express';
 import {
+    ExportContentType,
+    M3uExportEntry,
+    sortExportEntries,
     detectContentType,
-    formatMovieCategory,
-    formatSeriesCategory,
-    extractMediaBasename,
+    formatCategory,
+    parseSeriesEpisode,
+    formatMovieTitle,
+    getStreamExtension,
     escapeAttr,
-    rewriteExtinfGroup,
     buildProxiedStreamUrl,
     fetchXtreamJson,
 } from './m3u-export-classifier';
 
+export type { ExportContentType, M3uExportEntry };
 export {
     detectContentType,
-    formatMovieCategory,
-    formatSeriesCategory,
-    extractMediaBasename,
+    formatCategory,
+    parseSeriesEpisode,
+    formatMovieTitle,
+    getStreamExtension,
     escapeAttr,
+    buildProxiedStreamUrl,
 };
 
 export async function streamXtreamM3u(
@@ -27,7 +33,7 @@ export async function streamXtreamM3u(
     password: string,
     outputFormat: string,
     streamType: string,
-    proxyBase: string,
+    hostBase: string,
     serverToken: string | null,
     res: Response,
     useProxy = true
@@ -35,101 +41,61 @@ export async function streamXtreamM3u(
     const cleanServer = serverUrl.replace(/\/+$/, '');
     const userEnc = encodeURIComponent(username);
     const passEnc = encodeURIComponent(password);
+    const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
 
-    if (streamType === 'movie' || streamType === 'vod') {
-        const { vodCount } = await streamLive(
-            cleanServer,
-            userEnc,
-            passEnc,
-            outputFormat,
-            proxyBase,
-            serverToken,
-            res,
-            useProxy,
-            streamType
-        );
-        if (vodCount === 0 && !res.writableEnded) {
-            await streamMovies(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
-        }
-        return;
-    }
-    if (streamType === 'series') {
-        const { seriesCount } = await streamLive(
-            cleanServer,
-            userEnc,
-            passEnc,
-            outputFormat,
-            proxyBase,
-            serverToken,
-            res,
-            useProxy,
-            streamType
-        );
-        if (seriesCount === 0 && !res.writableEnded) {
-            await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy, streamType);
-        }
-        return;
-    }
-    if (streamType === 'live') {
-        await streamLive(
-            cleanServer,
-            userEnc,
-            passEnc,
-            outputFormat,
-            proxyBase,
-            serverToken,
-            res,
-            useProxy,
-            streamType
-        );
-        return;
-    }
+    const entries: M3uExportEntry[] = [];
 
-    // Default: stream Live TV, then supplement with Movies and Series via Xtream JSON API
-    const { vodCount, seriesCount } = await streamLive(
+    // 1. Fetch live / main M3U stream entries
+    let liveUrl = `${cleanServer}/get.php?username=${userEnc}&password=${passEnc}&type=m3u_plus`;
+    if (outputFormat) liveUrl += `&output=${encodeURIComponent(outputFormat)}`;
+
+    const { vodCount, seriesCount } = await collectM3uFromUrl(
+        liveUrl,
         cleanServer,
-        userEnc,
-        passEnc,
-        outputFormat,
-        proxyBase,
-        serverToken,
-        res,
+        hostBase,
+        tokenParam,
+        entries,
         useProxy,
         streamType
     );
 
-    if (vodCount === 0 && !res.writableEnded) {
-        await streamMovies(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy);
+    // 2. Fetch VOD / Movies if none were in the M3U and movies are requested
+    const needVod = streamType !== 'live' && (vodCount === 0 || streamType === 'movie' || streamType === 'vod');
+    if (needVod && !res.writableEnded) {
+        await collectMovies(cleanServer, userEnc, passEnc, hostBase, tokenParam, entries, useProxy);
     }
 
-    if (seriesCount === 0 && !res.writableEnded) {
-        await streamSeries(cleanServer, userEnc, passEnc, proxyBase, serverToken, res, useProxy, streamType);
+    // 3. Fetch Series if none were in the M3U and series are requested
+    const needSeries = streamType !== 'live' && (seriesCount === 0 || streamType === 'series');
+    if (needSeries && !res.writableEnded) {
+        await collectSeries(cleanServer, userEnc, passEnc, hostBase, tokenParam, entries, useProxy, streamType);
+    }
+
+    // Filter by streamType if requested
+    let finalEntries = entries;
+    if (streamType === 'live') {
+        finalEntries = entries.filter((e) => e.type === 'live');
+    } else if (streamType === 'movie' || streamType === 'vod' || streamType === 'movies') {
+        finalEntries = entries.filter((e) => e.type === 'movie');
+    } else if (streamType === 'series' || streamType === 'tvshows' || streamType === 'tv') {
+        finalEntries = entries.filter((e) => e.type === 'series');
+    }
+
+    // Sort deterministically: Live -> Movies -> Series
+    const sorted = sortExportEntries(finalEntries);
+    for (const item of sorted) {
+        if (res.writableEnded || res.destroyed) break;
+        res.write(`${item.extinf}\n${item.streamUrl}\n`);
     }
 }
 
-async function streamLive(
+async function collectMovies(
     cleanServer: string,
     userEnc: string,
     passEnc: string,
-    outputFormat: string,
-    proxyBase: string,
-    serverToken: string | null,
-    res: Response,
-    useProxy = true,
-    streamType = ''
-): Promise<{ streamCount: number; vodCount: number; seriesCount: number }> {
-    let liveUrl = `${cleanServer}/get.php?username=${userEnc}&password=${passEnc}&type=m3u_plus`;
-    if (outputFormat) liveUrl += `&output=${encodeURIComponent(outputFormat)}`;
-    return streamM3uFromUrl(liveUrl, cleanServer, proxyBase, serverToken, res, useProxy, streamType);
-}
-
-async function streamMovies(
-    cleanServer: string,
-    userEnc: string,
-    passEnc: string,
-    proxyBase: string,
-    serverToken: string | null,
-    res: Response,
+    hostBase: string,
+    tokenParam: string,
+    entries: M3uExportEntry[],
     useProxy = true
 ): Promise<void> {
     const catUrl = `${cleanServer}/player_api.php?username=${userEnc}&password=${passEnc}&action=get_vod_categories`;
@@ -153,30 +119,31 @@ async function streamMovies(
     }>>(apiUrl);
 
     if (!Array.isArray(vodStreams)) return;
-    const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
 
     for (const item of vodStreams) {
-        if (!item || !item.stream_id || res.writableEnded) continue;
-        const name = item.name || `Movie ${item.stream_id}`;
+        if (!item || !item.stream_id) continue;
+        const name = formatMovieTitle(item.name || `Movie ${item.stream_id}`);
         const ext = item.container_extension || 'mp4';
         const logo = item.stream_icon || '';
-        const rawCat = (item.category_id && catMap.get(String(item.category_id))) || 'Movies';
-        const catName = formatMovieCategory(rawCat);
-        const movieStreamUrl = `${cleanServer}/movie/${userEnc}/${passEnc}/${item.stream_id}.${ext}`;
-        const proxied = `${proxyBase}/stream-proxy/movie/${item.stream_id}.${ext}?url=${encodeURIComponent(movieStreamUrl)}${tokenParam}`;
-        const finalUrl = useProxy ? proxied : movieStreamUrl;
-        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}",${name}`;
-        res.write(`${extinf}\n${finalUrl}\n`);
+        const rawCat = (item.category_id && catMap.get(String(item.category_id))) || 'Other';
+        const groupTitle = formatCategory(rawCat, 'movie');
+        const rawStreamUrl = `${cleanServer}/movie/${userEnc}/${passEnc}/${item.stream_id}.${ext}`;
+        const streamUrl = useProxy
+            ? buildProxiedStreamUrl(hostBase, 'movie', rawStreamUrl, tokenParam, undefined, item.stream_id)
+            : rawStreamUrl;
+
+        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(name)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(groupTitle)}",${name}`;
+        entries.push({ type: 'movie', extinf, streamUrl, groupTitle, title: name });
     }
 }
 
-async function streamSeries(
+async function collectSeries(
     cleanServer: string,
     userEnc: string,
     passEnc: string,
-    proxyBase: string,
-    serverToken: string | null,
-    res: Response,
+    hostBase: string,
+    tokenParam: string,
+    entries: M3uExportEntry[],
     useProxy = true,
     streamType = ''
 ): Promise<void> {
@@ -200,7 +167,6 @@ async function streamSeries(
     }>>(listUrl);
 
     if (!Array.isArray(seriesList) || seriesList.length === 0) return;
-    const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
 
     const maxSeries = streamType === 'series' ? 300 : 50;
     const seriesToFetch = seriesList.slice(0, maxSeries);
@@ -209,7 +175,6 @@ async function streamSeries(
 
     const worker = async () => {
         while (nextIdx < seriesToFetch.length) {
-            if (res.writableEnded || res.destroyed) break;
             const series = seriesToFetch[nextIdx++];
             if (!series?.series_id) continue;
 
@@ -224,28 +189,38 @@ async function streamSeries(
                 }>>;
             }>(infoUrl);
 
-            if (!info?.episodes || res.writableEnded || res.destroyed) continue;
+            if (!info?.episodes) continue;
 
-            const seriesName = series.name || `Series ${series.series_id}`;
+            const baseSeriesName = series.name || `Series ${series.series_id}`;
             const logo = series.cover || '';
-            const rawCat = (series.category_id && catMap.get(String(series.category_id))) || seriesName;
-            const catName = formatSeriesCategory(rawCat);
+            const rawCat = (series.category_id && catMap.get(String(series.category_id))) || baseSeriesName;
+            const groupTitle = formatCategory(rawCat, 'series');
 
             for (const [seasonKey, episodes] of Object.entries(info.episodes)) {
                 if (!Array.isArray(episodes)) continue;
                 for (const ep of episodes) {
-                    if (!ep?.id || res.writableEnded) continue;
+                    if (!ep?.id) continue;
                     const ext = ep.container_extension || 'mp4';
-                    const s = ep.season ?? seasonKey;
-                    const e = ep.episode_num ?? '?';
-                    const epTitle = ep.title
-                        ? `${seriesName} S${s}E${e} - ${ep.title}`
-                        : `${seriesName} S${s}E${e}`;
-                    const epUrl = `${cleanServer}/series/${userEnc}/${passEnc}/${ep.id}.${ext}`;
-                    const proxied = `${proxyBase}/stream-proxy/series/${ep.id}.${ext}?url=${encodeURIComponent(epUrl)}${tokenParam}`;
-                    const finalUrl = useProxy ? proxied : epUrl;
-                    const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(epTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(catName)}",${epTitle}`;
-                    res.write(`${extinf}\n${finalUrl}\n`);
+                    const season = Number(ep.season ?? seasonKey) || 1;
+                    const episode = Number(ep.episode_num) || 1;
+                    const sStr = String(season).padStart(2, '0');
+                    const eStr = String(episode).padStart(2, '0');
+                    const displayTitle = `${baseSeriesName} S${sStr}E${eStr}`;
+                    const rawStreamUrl = `${cleanServer}/series/${userEnc}/${passEnc}/${ep.id}.${ext}`;
+                    const streamUrl = useProxy
+                        ? buildProxiedStreamUrl(hostBase, 'series', rawStreamUrl, tokenParam, series.series_id, ep.id)
+                        : rawStreamUrl;
+
+                    const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(displayTitle)}" tvg-logo="${escapeAttr(logo)}" group-title="${escapeAttr(groupTitle)}",${displayTitle}`;
+                    entries.push({
+                        type: 'series',
+                        extinf,
+                        streamUrl,
+                        groupTitle,
+                        title: baseSeriesName,
+                        season,
+                        episode,
+                    });
                 }
             }
         }
@@ -255,12 +230,12 @@ async function streamSeries(
     await Promise.all(pool);
 }
 
-function streamM3uFromUrl(
+function collectM3uFromUrl(
     targetUrl: string,
     cleanServer: string,
-    proxyBase: string,
-    serverToken: string | null,
-    res: Response,
+    hostBase: string,
+    tokenParam: string,
+    entries: M3uExportEntry[],
     useProxy = true,
     streamType = '',
     hopCount = 0
@@ -291,7 +266,9 @@ function streamM3uFromUrl(
                 if (status >= 300 && status < 400 && upstream.headers.location) {
                     upstream.resume();
                     const redirectUrl = new URL(upstream.headers.location, targetUrl).href;
-                    return resolve(streamM3uFromUrl(redirectUrl, cleanServer, proxyBase, serverToken, res, useProxy, streamType, hopCount + 1));
+                    return resolve(
+                        collectM3uFromUrl(redirectUrl, cleanServer, hostBase, tokenParam, entries, useProxy, streamType, hopCount + 1)
+                    );
                 }
 
                 if (status !== 200) {
@@ -303,7 +280,6 @@ function streamM3uFromUrl(
                 let vodCount = 0;
                 let seriesCount = 0;
                 let pendingExtinf = '';
-                const tokenParam = serverToken ? `&token=${encodeURIComponent(serverToken)}` : '';
 
                 const rl = readline.createInterface({ input: upstream, crlfDelay: Infinity });
                 rl.on('line', (line) => {
@@ -311,11 +287,7 @@ function streamM3uFromUrl(
                     if (!trimmed || trimmed.startsWith('#EXTM3U')) return;
 
                     if (trimmed.startsWith('#')) {
-                        if (trimmed.startsWith('#EXTINF:')) {
-                            pendingExtinf = trimmed;
-                        } else {
-                            res.write(trimmed + '\n');
-                        }
+                        if (trimmed.startsWith('#EXTINF:')) pendingExtinf = trimmed;
                         return;
                     }
 
@@ -339,29 +311,56 @@ function streamM3uFromUrl(
                     else if (contentType === 'movie') vodCount++;
                     else streamCount++;
 
-                    if (streamType === 'live' && contentType !== 'live') {
-                        pendingExtinf = '';
-                        return;
-                    }
-                    if ((streamType === 'movie' || streamType === 'vod' || streamType === 'movies') && contentType !== 'movie') {
-                        pendingExtinf = '';
-                        return;
-                    }
-                    if ((streamType === 'series' || streamType === 'tvshows' || streamType === 'tv') && contentType !== 'series') {
-                        pendingExtinf = '';
-                        return;
-                    }
+                    const logoMatch = pendingExtinf.match(/tvg-logo="([^"]*)"/i);
+                    const tvgLogo = logoMatch ? logoMatch[1] : '';
+                    const idMatch = pendingExtinf.match(/tvg-id="([^"]*)"/i);
+                    const rawTvgId = idMatch ? idMatch[1] : '';
 
-                    if (pendingExtinf) {
-                        const outExtinf = rewriteExtinfGroup(pendingExtinf, contentType, groupName, streamName);
-                        res.write(outExtinf + '\n');
-                        pendingExtinf = '';
-                    }
+                    const groupTitle = formatCategory(groupName, contentType);
 
-                    const finalUrl = useProxy
-                        ? buildProxiedStreamUrl(proxyBase, contentType, fullUrl, tokenParam)
-                        : fullUrl;
-                    res.write(finalUrl + '\n');
+                    if (contentType === 'series') {
+                        const parsedSeries = parseSeriesEpisode(streamName, groupName);
+                        const streamUrl = useProxy
+                            ? buildProxiedStreamUrl(hostBase, 'series', fullUrl, tokenParam, '1')
+                            : fullUrl;
+                        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(parsedSeries.displayTitle)}" tvg-logo="${escapeAttr(tvgLogo)}" group-title="${escapeAttr(groupTitle)}",${parsedSeries.displayTitle}`;
+                        entries.push({
+                            type: 'series',
+                            extinf,
+                            streamUrl,
+                            groupTitle,
+                            title: parsedSeries.seriesTitle,
+                            season: parsedSeries.season,
+                            episode: parsedSeries.episode,
+                        });
+                    } else if (contentType === 'movie') {
+                        const movieTitle = formatMovieTitle(streamName);
+                        const streamUrl = useProxy
+                            ? buildProxiedStreamUrl(hostBase, 'movie', fullUrl, tokenParam)
+                            : fullUrl;
+                        const extinf = `#EXTINF:-1 tvg-id="" tvg-name="${escapeAttr(movieTitle)}" tvg-logo="${escapeAttr(tvgLogo)}" group-title="${escapeAttr(groupTitle)}",${movieTitle}`;
+                        entries.push({
+                            type: 'movie',
+                            extinf,
+                            streamUrl,
+                            groupTitle,
+                            title: movieTitle,
+                        });
+                    } else {
+                        const streamUrl = useProxy
+                            ? buildProxiedStreamUrl(hostBase, 'live', fullUrl, tokenParam)
+                            : fullUrl;
+                        const tvgIdAttr = rawTvgId ? `tvg-id="${escapeAttr(rawTvgId)}" ` : '';
+                        const extinf = `#EXTINF:-1 ${tvgIdAttr}tvg-name="${escapeAttr(streamName)}" tvg-logo="${escapeAttr(tvgLogo)}" group-title="${escapeAttr(groupTitle)}",${streamName}`;
+                        entries.push({
+                            type: 'live',
+                            extinf,
+                            streamUrl,
+                            groupTitle,
+                            title: streamName,
+                        });
+                    }
+                    pendingExtinf = '';
                 });
 
                 rl.on('close', () => resolve({ streamCount, vodCount, seriesCount }));
