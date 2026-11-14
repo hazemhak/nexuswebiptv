@@ -171,7 +171,7 @@ export function createWebBackendApp(
         /^\/(?:api\/)?(?:stream-proxy|live|movie|series|player_api|get|xmltv)(?:\/.*)?$/,
         corsMiddleware
     );
-    mountStreamProxy(app, providerUrlPolicy);
+    mountStreamProxy(app, providerUrlPolicy, options.storage ?? null);
 
     const m3uExportHandler = createExportHandler(
         options.storage ?? null,
