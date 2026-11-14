@@ -35,8 +35,14 @@ export function createExportHandler(
         }
 
         const effectiveToken = extractRequestToken(req) || accessToken || uiPassword || null;
-        const rawParamId = req.params['id'];
+        const rawParamId = req.params['id'] || req.params['playlistId'];
         let targetId = (Array.isArray(rawParamId) ? rawParamId[0] : rawParamId) || '';
+        if (!targetId && typeof req.query['username'] === 'string') {
+            const u = req.query['username'].trim();
+            if (u && u !== 'admin' && u !== 'all' && u !== accessToken && u !== uiPassword) {
+                targetId = u;
+            }
+        }
 
         if (req.path.includes('/token/')) {
             const parts = req.path.split('/token/')[1]?.split('/') || [];
@@ -66,7 +72,17 @@ export function createExportHandler(
         if (targetId) {
             const playlistId = targetId.replace(/\.m3u8?$/i, '');
             if (playlistId !== 'all' && playlistId !== 'playlist') {
-                const doc = storage.playlists.get(playlistId);
+                let doc = storage.playlists.get(playlistId);
+                if (!doc) {
+                    const all = storage.playlists.listAll();
+                    const targetLower = playlistId.toLowerCase();
+                    const targetSlug = targetLower.replace(/[^a-z0-9]+/g, '');
+                    doc = all.find((p) => {
+                        const title = String(p.title ?? '').toLowerCase().trim();
+                        const slug = title.replace(/[^a-z0-9]+/g, '');
+                        return title === targetLower || (slug && slug === targetSlug);
+                    }) ?? null;
+                }
                 if (!doc) {
                     res.status(404).send('#EXTM3U\n# Error: Playlist not found\n');
                     return;

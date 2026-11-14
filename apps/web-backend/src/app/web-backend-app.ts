@@ -168,7 +168,7 @@ export function createWebBackendApp(
     // originates from the host device rather than the user's browser.
     // Endpoint: GET /stream-proxy?url=<encoded-stream-url>
     app.options(
-        /^\/(?:api\/)?(?:stream-proxy|live|movie|series|player_api|get|xmltv)(?:\/.*)?$/,
+        /^\/(?:api\/)?(?:stream-proxy|live|movie|series|player_api|get|xmltv|p|playlist)(?:\/.*)?$/,
         corsMiddleware
     );
     mountStreamProxy(app, providerUrlPolicy, options.storage ?? null);

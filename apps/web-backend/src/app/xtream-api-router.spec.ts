@@ -159,6 +159,54 @@ describe('xtream api router', () => {
         });
     });
 
+    it('supports selecting all playlists or a single playlist via username or path', async () => {
+        await withTempStorage(async (storage) => {
+            const pl1 = {
+                ...m3uDocument('pl-sports', 'Sports Pack'),
+                playlist: {
+                    header: { raw: '#EXTM3U' },
+                    items: [{ name: 'Sports 1', url: 'http://stream.example/live/s1.ts' }],
+                },
+            };
+            const pl2 = {
+                ...m3uDocument('pl-movies', 'Cinema Pack'),
+                playlist: {
+                    header: { raw: '#EXTM3U' },
+                    items: [{ name: 'Movie 1', url: 'http://stream.example/movie/m1.mp4' }],
+                },
+            };
+            storage.playlists.upsert(pl1, { keepPayload: false });
+            storage.playlists.upsert(pl2, { keepPayload: false });
+
+            const app = express();
+            app.use(createXtreamApiRouter(storage, null));
+            await withServer(app, async (baseUrl) => {
+                // 1. Username = admin (All Playlists)
+                const resAll = await fetch(`${baseUrl}/player_api.php?username=admin&password=any&action=get_live_streams`);
+                const dataAll = (await resAll.json()) as Array<{ name: string }>;
+                expect(dataAll.some((s) => s.name === 'Sports 1')).toBe(true);
+
+                // 2. Username = sports-pack (Single Playlist by slug/title)
+                const resSports = await fetch(`${baseUrl}/player_api.php?username=sports-pack&password=any&action=get_live_streams`);
+                const dataSports = (await resSports.json()) as Array<{ name: string }>;
+                expect(dataSports.length).toBe(1);
+                expect(dataSports[0].name).toBe('Sports 1');
+
+                // 3. Username = pl-movies (Single Playlist by ID)
+                const resMovies = await fetch(`${baseUrl}/player_api.php?username=pl-movies&password=any&action=get_vod_streams`);
+                const dataMovies = (await resMovies.json()) as Array<{ name: string }>;
+                expect(dataMovies.length).toBe(1);
+                expect(dataMovies[0].name).toContain('Movie 1');
+
+                // 4. Path-based: /p/pl-sports/player_api.php
+                const resPath = await fetch(`${baseUrl}/p/pl-sports/player_api.php?action=get_live_streams`);
+                const dataPath = (await resPath.json()) as Array<{ name: string }>;
+                expect(dataPath.length).toBe(1);
+                expect(dataPath[0].name).toBe('Sports 1');
+            });
+        });
+    });
+
     it('returns empty placeholder when database has 0 playlists', async () => {
         await withTempStorage(async (storage) => {
             const app = express();

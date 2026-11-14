@@ -104,6 +104,26 @@ export class SettingsM3uExportSectionComponent implements OnInit {
         typeof window !== 'undefined' ? window.location.origin : ''
     );
 
+    readonly selectedPlaylistDoc = computed(() => {
+        const id = this.selectedExportPlaylist();
+        if (!id || id === 'all') return null;
+        return this.allPlaylists().find((p) => p._id === id) ?? null;
+    });
+
+    readonly xtreamUsername = computed(() => {
+        const pl = this.selectedPlaylistDoc();
+        if (!pl) return this.serverToken().trim() || 'admin';
+        if (pl.username) return pl.username;
+        const slug = (pl.title || pl.filename || pl._id).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        return slug || pl._id;
+    });
+
+    readonly xtreamPassword = computed(() => {
+        const pl = this.selectedPlaylistDoc();
+        if (pl?.password) return pl.password;
+        return this.serverToken().trim() || 'admin';
+    });
+
     ngOnInit(): void {
         this.loadPlaylists();
         void this.checkServerStatus();

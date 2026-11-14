@@ -29,22 +29,36 @@ export function createXtreamApiRouter(
 ): Router {
     const router = Router();
 
-    const checkAuth = (req: Request): boolean => {
+    const checkAuth = (req: Request, playlists: Array<Record<string, unknown>>): boolean => {
         if (!accessToken && !uiPassword) return true;
         const q = req.query;
         const b = req.body || {};
         const u = String(q['username'] || b['username'] || '').trim();
         const p = String(q['password'] || b['password'] || '').trim();
         const token = String(q['token'] || b['token'] || '').trim();
-        const effective = u || p || token;
 
         if (accessToken && (u === accessToken || p === accessToken || token === accessToken)) return true;
         if (uiPassword && (u === uiPassword || p === uiPassword || token === uiPassword)) return true;
-        return effective === accessToken || effective === uiPassword;
+
+        if (u && p) {
+            const matchedXtream = playlists.find(
+                (pl) =>
+                    pl['serverUrl'] &&
+                    String(pl['username'] || '').toLowerCase() === u.toLowerCase() &&
+                    String(pl['password'] || '') === p
+            );
+            if (matchedXtream) return true;
+        }
+
+        return false;
     };
 
     const playerApiHandler = async (req: Request, res: Response) => {
-        if (!checkAuth(req)) {
+        const allPlaylists = storage
+            ? storage.playlists.listAll().map((d) => legacySourceDocument(d) as Record<string, unknown>)
+            : [];
+
+        if (!checkAuth(req, allPlaylists)) {
             res.status(200).json({
                 user_info: { auth: 0, status: 'Disabled', message: 'Invalid credentials' },
             });
@@ -66,12 +80,30 @@ export function createXtreamApiRouter(
             return;
         }
 
-        const playlists = storage
-            ? storage.playlists.listAll().map((d) => legacySourceDocument(d) as Record<string, unknown>)
-            : [];
+        // Playlist & Multi-Account Selection:
+        //  - If username or route parameter targets a specific playlist (by ID, title, or slug), filter to it.
+        //  - If username is 'admin' or 'all', use all playlists.
+        const pathTarget = String(req.params?.['playlistId'] || '').trim();
+        const rawTarget = pathTarget || (username !== 'admin' && username !== 'all' ? username : '');
+        const target = rawTarget.toLowerCase().trim();
 
-        // Check for upstream Xtream source
-        const xtreamSource = playlists.find((p) => p['serverUrl'] && p['username'] && p['password']);
+        let playlistsToUse = allPlaylists;
+        if (target) {
+            const targetSlug = target.replace(/[^a-z0-9]+/g, '');
+            const matched = allPlaylists.filter((p) => {
+                const id = String(p['_id'] ?? p['id'] ?? '').toLowerCase();
+                const title = String(p['title'] ?? '').toLowerCase().trim();
+                const u = String(p['username'] ?? '').toLowerCase().trim();
+                const slug = title.replace(/[^a-z0-9]+/g, '');
+                return id === target || title === target || u === target || (slug && slug === targetSlug);
+            });
+            if (matched.length > 0) {
+                playlistsToUse = matched;
+            }
+        }
+
+        // Check for upstream Xtream source in the resolved playlist(s)
+        const xtreamSource = playlistsToUse.find((p) => p['serverUrl'] && p['username'] && p['password']);
         if (xtreamSource) {
             const clean = String(xtreamSource['serverUrl']).replace(/\/+$/, '');
             const u = encodeURIComponent(String(xtreamSource['username']));
@@ -88,8 +120,8 @@ export function createXtreamApiRouter(
             }
         }
 
-        // Handle catalog from stored M3U / local playlists
-        res.json(handleLocalXtreamAction(action, playlists, categoryId, seriesId, vodId));
+        // Handle catalog from stored M3U / local playlists (filtered or all)
+        res.json(handleLocalXtreamAction(action, playlistsToUse, categoryId, seriesId, vodId));
     };
 
     const getPhpHandler = async (req: Request, res: Response) => {
@@ -109,10 +141,36 @@ export function createXtreamApiRouter(
         res.send('<?xml version="1.0" encoding="UTF-8"?><tv generator-info-name="IPTVnator"></tv>');
     };
 
-    router.get(['/player_api.php', '/api/player_api.php'], playerApiHandler);
-    router.post(['/player_api.php', '/api/player_api.php'], playerApiHandler);
-    router.get(['/get.php', '/api/get.php'], getPhpHandler);
-    router.get(['/xmltv.php', '/api/xmltv.php'], xmltvHandler);
+    const playerApiRoutes = [
+        '/player_api.php',
+        '/api/player_api.php',
+        '/p/:playlistId/player_api.php',
+        '/api/p/:playlistId/player_api.php',
+        '/playlist/:playlistId/player_api.php',
+        '/api/playlist/:playlistId/player_api.php',
+    ];
+    router.get(playerApiRoutes, playerApiHandler);
+    router.post(playerApiRoutes, playerApiHandler);
+
+    const getPhpRoutes = [
+        '/get.php',
+        '/api/get.php',
+        '/p/:playlistId/get.php',
+        '/api/p/:playlistId/get.php',
+        '/playlist/:playlistId/get.php',
+        '/api/playlist/:playlistId/get.php',
+    ];
+    router.get(getPhpRoutes, getPhpHandler);
+
+    const xmltvRoutes = [
+        '/xmltv.php',
+        '/api/xmltv.php',
+        '/p/:playlistId/xmltv.php',
+        '/api/p/:playlistId/xmltv.php',
+        '/playlist/:playlistId/xmltv.php',
+        '/api/playlist/:playlistId/xmltv.php',
+    ];
+    router.get(xmltvRoutes, xmltvHandler);
 
     return router;
 }

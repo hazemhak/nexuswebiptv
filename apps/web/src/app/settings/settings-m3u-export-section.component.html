@@ -142,12 +142,19 @@
                 </button>
 
                 <span style="font-weight: 600;">Username:</span>
-                <code>{{ serverToken() || 'admin' }}</code>
+                <code>{{ xtreamUsername() }}</code>
                 <span></span>
 
                 <span style="font-weight: 600;">Password:</span>
-                <code>{{ serverToken() || 'admin' }}</code>
+                <code>{{ xtreamPassword() }}</code>
                 <span></span>
+            </div>
+            <div style="margin-top: 10px; font-size: 12px; opacity: 0.85;">
+                @if (selectedPlaylistDoc(); as pl) {
+                    <span>Account Profile: <strong>{{ pl.title || pl.filename }}</strong> (Loads only this playlist).</span>
+                } @else {
+                    <span>Account Profile: <strong>All Playlists</strong> (Merged). Change the Playlist Selection above to get credentials for a specific playlist.</span>
+                }
             </div>
         </div>
 
